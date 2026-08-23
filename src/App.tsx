@@ -19,23 +19,94 @@ export default function App() {
         <header className="border-b border-surface-border">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
             <div className="flex items-center gap-3">
-              {/* GenLayer Logo Icon */}
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-raised border border-surface-border p-1.5 shadow-sm">
-                <svg viewBox="0 0 500 500" className="h-full w-full fill-current text-gold" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M250 20 L480 460 L330 460 L250 300 L170 460 L20 460 Z" />
-                  <path d="M250 100 L350 400 L250 300 L150 400 Z" fill="#0F0E14" />
+              {/* GenLayer Official Animated Consensus Orbit Logo */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-raised border border-surface-border p-1 shadow-sm">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 100 100"
+                  className="w-full h-full gl-orbit"
+                >
+                  <defs>
+                    <linearGradient id="gl-orbit-outer-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="var(--gl-a, #7A40FF)" />
+                      <stop offset="100%" stopColor="var(--gl-b, #00F5D4)" />
+                    </linearGradient>
+                    <linearGradient id="gl-orbit-inner-grad" x1="100%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="var(--gl-b, #00F5D4)" />
+                      <stop offset="100%" stopColor="var(--gl-a, #7A40FF)" />
+                    </linearGradient>
+                    <filter id="gl-orbit-glow" x="-120%" y="-120%" width="340%" height="340%">
+                      <feGaussianBlur stdDeviation="2.2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+
+                  <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="6" />
+                  <circle cx="50" cy="50" r="29" fill="none" stroke="rgba(255,255,255,.08)" strokeWidth="5" />
+
+                  <g transform="translate(30, 30) scale(0.4)" className="gl-orbit-wings">
+                    <path d="M 46,10 L 10,90 L 46,78 L 30,62 L 46,46 Z M 54,10 L 90,90 L 54,78 L 70,62 L 54,46 Z" fill="currentColor" />
+                  </g>
+
+                  <g className="gl-orbit-outer">
+                    <circle
+                      cx="50" cy="50" r="42"
+                      fill="none"
+                      stroke="url(#gl-orbit-outer-grad)"
+                      strokeWidth="6"
+                      strokeLinecap="round"
+                      strokeDasharray="198 66"
+                    />
+                  </g>
+
+                  <g className="gl-orbit-inner">
+                    <circle
+                      cx="50" cy="50" r="29"
+                      fill="none"
+                      stroke="url(#gl-orbit-inner-grad)"
+                      strokeWidth="5"
+                      strokeLinecap="round"
+                      strokeDasharray="109 73"
+                    />
+                  </g>
+
+                  <g className="gl-orbit-core">
+                    <path d="M 50,50 L 62,62 L 50,74 L 38,62 Z" fill="#00F5D4" filter="url(#gl-orbit-glow)" transform="translate(30, 30) scale(0.4)" />
+                  </g>
+
+                  <style>{`
+                    .gl-orbit-outer, .gl-orbit-inner, .gl-orbit-core {
+                      transform-box: fill-box;
+                      transform-origin: center;
+                    }
+                    .gl-orbit-outer { animation: gl-orbit-cw 1.6s linear infinite; }
+                    .gl-orbit-inner { animation: gl-orbit-ccw 2.24s linear infinite; }
+                    .gl-orbit-core { animation: gl-orbit-pulse 1.44s ease-in-out infinite; }
+                    .gl-orbit-wings {
+                      color: #7A40FF;
+                      animation: gl-wings-breathe 3.2s ease-in-out infinite;
+                    }
+                    @keyframes gl-orbit-cw { to { transform: rotate(360deg); } }
+                    @keyframes gl-orbit-ccw { to { transform: rotate(-360deg); } }
+                    @keyframes gl-orbit-pulse {
+                      0%, 100% { opacity: .6; transform: scale(.85); }
+                      50%      { opacity: 1;  transform: scale(1.15); }
+                    }
+                    @keyframes gl-wings-breathe {
+                      0%, 100% { opacity: 0.1; filter: drop-shadow(0 0 2px currentColor); }
+                      50%      { opacity: 0.35; filter: drop-shadow(0 0 12px currentColor); }
+                    }
+                  `}</style>
                 </svg>
               </div>
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-display font-black text-ink-900">
-                  2K
-                </div>
-                <div>
-                  <h1 className="font-display text-lg font-bold leading-tight text-ink-50">2048 On-Chain</h1>
-                  <p className="flex items-center gap-1 text-[11px] text-muted">
-                    GenLayer Testnet Bradbury · {shortenAddress(CONTRACT_ADDRESS)}
-                  </p>
-                </div>
+              <div>
+                <h1 className="font-display text-lg font-bold leading-tight text-ink-50">2048 On-Chain</h1>
+                <p className="flex items-center gap-1 text-[11px] text-muted">
+                  GenLayer Testnet Bradbury · {shortenAddress(CONTRACT_ADDRESS)}
+                </p>
               </div>
             </div>
             <WalletButton wallet={wallet} />
