@@ -19,18 +19,19 @@ export default function App() {
         <header className="border-b border-surface-border">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
             <div className="flex items-center gap-3">
-              {/* GenLayer Static Silver Vector Logo */}
+              {/* GenLayer Exact Static Silver Vector Logo */}
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-raised border border-surface-border p-2 shadow-sm">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 100 100"
-                  className="w-full h-full text-ink-50 fill-current drop-shadow-[0_0_6px_rgba(255,255,255,0.25)]"
+                  className="w-full h-full text-ink-50 fill-current"
                 >
-                  {/* Outer Wings / Arrows */}
+                  {/* Left Wing / Arrow */}
                   <path d="M 46,10 L 10,90 L 46,78 L 30,62 L 46,46 Z" />
+                  {/* Right Wing / Arrow */}
                   <path d="M 54,10 L 90,90 L 54,78 L 70,62 L 54,46 Z" />
-                  {/* Central Core Diamond */}
-                  <path d="M 50,42 L 58,50 L 50,58 L 42,50 Z" />
+                  {/* Corrected Center Diamond / Negative Space Shape */}
+                  <path d="M 50,44 L 62,60 L 50,74 L 38,60 Z" fill-rule="evenodd" />
                 </svg>
               </div>
               <div>
