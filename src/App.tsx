@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Blocks, Gamepad2, Trophy } from "lucide-react";
+import { Blocks, Gamepad2, Trophy, Github, Twitter, Info } from "lucide-react";
 import WalletButton from "./components/WalletButton";
 import FreePlay from "./components/FreePlay";
 import TournamentDashboard from "./components/TournamentDashboard";
@@ -14,50 +14,105 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("play");
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-surface-border">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-display font-black text-ink-900">
-              2K
+    <div className="min-h-screen flex flex-col justify-between">
+      <div>
+        <header className="border-b border-surface-border">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-display font-black text-ink-900">
+                2K
+              </div>
+              <div>
+                <h1 className="font-display text-lg font-bold leading-tight text-ink-50">2048 On-Chain</h1>
+                <p className="flex items-center gap-1 text-[11px] text-muted">
+                  <Blocks size={11} /> GenLayer Testnet Bradbury · {shortenAddress(CONTRACT_ADDRESS)}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-display text-lg font-bold leading-tight text-ink-50">2048 On-Chain</h1>
-              <p className="flex items-center gap-1 text-[11px] text-muted">
-                <Blocks size={11} /> GenLayer Testnet Bradbury · {shortenAddress(CONTRACT_ADDRESS)}
+            <WalletButton wallet={wallet} />
+          </div>
+        </header>
+
+        <nav className="mx-auto flex max-w-5xl gap-2 px-4 pt-6 sm:px-6">
+          <TabButton active={tab === "play"} onClick={() => setTab("play")} icon={<Gamepad2 size={16} />}>
+            Free Play
+          </TabButton>
+          <TabButton
+            active={tab === "tournaments"}
+            onClick={() => setTab("tournaments")}
+            icon={<Trophy size={16} />}
+          >
+            Tournaments
+          </TabButton>
+        </nav>
+
+        <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+          {wallet.error && (
+            <div className="mb-4 rounded-lg border border-gold-deep/40 bg-gold-deep/10 px-4 py-2 text-sm text-gold-soft">
+              {wallet.error}
+            </div>
+          )}
+
+          {tab === "play" ? <FreePlay wallet={wallet} /> : <TournamentDashboard wallet={wallet} />}
+
+          {/* How It Works Section */}
+          <section className="mt-12 rounded-2xl border border-surface-border bg-surface p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-3 text-gold">
+              <Info size={18} />
+              <h3 className="font-display text-lg font-bold text-ink-50">How It Works</h3>
+            </div>
+            <div className="space-y-3 text-sm text-muted leading-relaxed">
+              <p>
+                <strong className="text-ink-50">Free Play:</strong> Play the classic 2048 game directly in your browser. When you finish, submit your score on-chain to climb the global leaderboard[cite: 7].
+              </p>
+              <p>
+                <strong className="text-ink-50">Tournaments:</strong> Join active time-boxed tournaments with entry fees[cite: 7]. Submit your highest score before the deadline. Top players split the prize pool automatically and can claim rewards anytime[cite: 7].
+              </p>
+              <p>
+                <strong className="text-ink-50">Intelligent Contract:</strong> Powered by GenLayer's deterministic execution layer on the Bradbury Testnet[cite: 7], ensuring trustless scoring and fair prize distribution.
               </p>
             </div>
+          </section>
+        </main>
+      </div>
+
+      {/* Footer with Credits & Socials */}
+      <footer className="border-t border-surface-border bg-surface/50 mt-12">
+        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted">
+          <div>
+            <span>Built with ❤️ by </span>
+            <a
+              href="https://x.com/amirhp771"
+              target="_blank"
+              rel="noreferrer"
+              className="text-gold font-semibold hover:underline"
+            >
+              @amirhp771
+            </a>
           </div>
-          <WalletButton wallet={wallet} />
+
+          <div className="flex items-center gap-4 font-medium">
+            <a
+              href="https://github.com/reza9133/genlayer2048"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-ink-50 hover:text-gold transition-colors"
+            >
+              <Github size={15} />
+              <span>GitHub</span>
+            </a>
+            <span className="text-surface-border">·</span>
+            <a
+              href="https://x.com/amirhp771"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 text-ink-50 hover:text-gold transition-colors"
+            >
+              <Twitter size={15} />
+              <span>Twitter / X</span>
+            </a>
+          </div>
         </div>
-      </header>
-
-      <nav className="mx-auto flex max-w-5xl gap-2 px-4 pt-6 sm:px-6">
-        <TabButton active={tab === "play"} onClick={() => setTab("play")} icon={<Gamepad2 size={16} />}>
-          Free Play
-        </TabButton>
-        <TabButton
-          active={tab === "tournaments"}
-          onClick={() => setTab("tournaments")}
-          icon={<Trophy size={16} />}
-        >
-          Tournaments
-        </TabButton>
-      </nav>
-
-      <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        {wallet.error && (
-          <div className="mb-4 rounded-lg border border-gold-deep/40 bg-gold-deep/10 px-4 py-2 text-sm text-gold-soft">
-            {wallet.error}
-          </div>
-        )}
-
-        {tab === "play" ? <FreePlay wallet={wallet} /> : <TournamentDashboard wallet={wallet} />}
-      </main>
-
-      <footer className="mx-auto max-w-5xl px-4 pb-10 pt-4 text-center text-xs text-muted sm:px-6">
-        Scores are self-reported and capped at a sanity bound on-chain — this is a casual leaderboard, not
-        an anti-cheat system.
       </footer>
     </div>
   );
