@@ -19,10 +19,11 @@ export default function App() {
         <header className="border-b border-surface-border">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
             <div className="flex items-center gap-3">
-              {/* GenLayer Official Logo Icon */}
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-raised border border-surface-border p-2">
-                <svg viewBox="0 0 512 512" className="h-full w-full fill-gold" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M256 32L32 480h112l112-224L368 480h112L256 32zm0 112l64 128H192l64-128z" />
+              {/* GenLayer Logo Icon */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-raised border border-surface-border p-1.5 shadow-sm">
+                <svg viewBox="0 0 500 500" className="h-full w-full fill-current text-gold" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M250 20 L480 460 L330 460 L250 300 L170 460 L20 460 Z" />
+                  <path d="M250 100 L350 400 L250 300 L150 400 Z" fill="#0F0E14" />
                 </svg>
               </div>
               <div className="flex items-center gap-2.5">
