@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-image: radial-gradient(circle at 20% -10%, rgba(124, 111, 232, 0.12), transparent 45%),
+    radial-gradient(circle at 100% 0%, rgba(237, 194, 46, 0.08), transparent 40%);
+  background-attachment: fixed;
+}
+
+@layer components {
+  .font-display {
+    font-family: "Space Grotesk", sans-serif;
+  }
+
+  .card {
+    @apply rounded-2xl border border-surface-border bg-surface p-5;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+      transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply btn bg-gold text-ink-900 hover:bg-gold-soft;
+  }
+
+  .btn-chain {
+    @apply btn bg-chain text-white hover:bg-chain-soft;
+  }
+
+  .btn-ghost {
+    @apply btn border border-surface-border bg-surface-raised text-ink-50 hover:border-chain-dim;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-surface-border bg-surface-raised
+      px-3 py-1 text-xs font-medium text-muted;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-surface-border bg-ink-900 px-3 py-2 text-sm text-ink-50
+      placeholder:text-muted/60 focus:border-chain focus:outline-none focus:ring-1 focus:ring-chain;
+  }
+
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: theme("colors.surface.border");
+    border-radius: 999px;
+  }
+}
