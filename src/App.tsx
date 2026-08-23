@@ -63,13 +63,13 @@ export default function App() {
             </div>
             <div className="space-y-3 text-sm text-muted leading-relaxed">
               <p>
-                <strong className="text-ink-50">Free Play:</strong> Play the classic 2048 game directly in your browser. When you finish, submit your score on-chain to climb the global leaderboard[cite: 7].
+                <strong className="text-ink-50">Free Play:</strong> Play the classic 2048 game directly in your browser. When you finish, submit your score on-chain to climb the global leaderboard.
               </p>
               <p>
-                <strong className="text-ink-50">Tournaments:</strong> Join active time-boxed tournaments with entry fees[cite: 7]. Submit your highest score before the deadline. Top players split the prize pool automatically and can claim rewards anytime[cite: 7].
+                <strong className="text-ink-50">Tournaments:</strong> Join active time-boxed tournaments with entry fees. Submit your highest score before the deadline. Top players split the prize pool automatically and can claim rewards anytime.
               </p>
               <p>
-                <strong className="text-ink-50">Intelligent Contract:</strong> Powered by GenLayer's deterministic execution layer on the Bradbury Testnet[cite: 7], ensuring trustless scoring and fair prize distribution.
+                <strong className="text-ink-50">Intelligent Contract:</strong> Powered by GenLayer's deterministic execution layer on the Bradbury Testnet, ensuring trustless scoring and fair prize distribution.
               </p>
             </div>
           </section>
