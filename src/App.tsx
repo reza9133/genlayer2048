@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Blocks, Gamepad2, Trophy, Github, Twitter, Info } from "lucide-react";
+import { Gamepad2, Trophy, Github, Twitter, Info } from "lucide-react";
 import WalletButton from "./components/WalletButton";
 import FreePlay from "./components/FreePlay";
 import TournamentDashboard from "./components/TournamentDashboard";
@@ -18,15 +18,23 @@ export default function App() {
       <div>
         <header className="border-b border-surface-border">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-display font-black text-ink-900">
-                2K
+            <div className="flex items-center gap-3">
+              {/* GenLayer Official Logo Icon */}
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-raised border border-surface-border p-2">
+                <svg viewBox="0 0 512 512" className="h-full w-full fill-gold" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M256 32L32 480h112l112-224L368 480h112L256 32zm0 112l64 128H192l64-128z" />
+                </svg>
               </div>
-              <div>
-                <h1 className="font-display text-lg font-bold leading-tight text-ink-50">2048 On-Chain</h1>
-                <p className="flex items-center gap-1 text-[11px] text-muted">
-                  <Blocks size={11} /> GenLayer Testnet Bradbury · {shortenAddress(CONTRACT_ADDRESS)}
-                </p>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold font-display font-black text-ink-900">
+                  2K
+                </div>
+                <div>
+                  <h1 className="font-display text-lg font-bold leading-tight text-ink-50">2048 On-Chain</h1>
+                  <p className="flex items-center gap-1 text-[11px] text-muted">
+                    GenLayer Testnet Bradbury · {shortenAddress(CONTRACT_ADDRESS)}
+                  </p>
+                </div>
               </div>
             </div>
             <WalletButton wallet={wallet} />
