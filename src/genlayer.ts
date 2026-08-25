@@ -41,13 +41,30 @@ export async function ensureBradburyNetwork(address: string) {
   return client;
 }
 
-async function waitForAccepted(hash: `0x${string}`) {
-  return readClient.waitForTransactionReceipt({
-    hash: hash as any,
-    status: TransactionStatus.ACCEPTED,
-    interval: 3000,
-    retries: 60,
-  });
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForStatus(
+  hash: `0x${string}`,
+  status: TransactionStatus,
+  { retries = 5, retryDelayMs = 4000 }: { retries?: number; retryDelayMs?: number } = {},
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await readClient.waitForTransactionReceipt({
+        hash: hash as any,
+        status,
+      });
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await sleep(retryDelayMs * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
 }
 
 const read = <T>(functionName: string, args: unknown[] = []) =>
@@ -85,6 +102,7 @@ async function write(
   functionName: string,
   args: unknown[] = [],
   value: bigint = 0n,
+  waitStatus: TransactionStatus = TransactionStatus.ACCEPTED,
 ) {
   const client = await ensureBradburyNetwork(address);
   const hash = (await client.writeContract({
@@ -93,7 +111,7 @@ async function write(
     args: args as any,
     value,
   })) as `0x${string}`;
-  return waitForAccepted(hash);
+  return waitForStatus(hash, waitStatus);
 }
 
 export const submitScore = (address: string, evidence: ReplayEvidence) =>
@@ -107,8 +125,8 @@ export const createTournament = (
     winnerCount: number;
     entryFeeWei: bigint;
     deadlineUnixSeconds: number;
+    initialFundWei?: bigint;
   },
-  initialFundWei: bigint = 0n,
 ) =>
   write(
     address,
@@ -120,7 +138,8 @@ export const createTournament = (
       params.entryFeeWei,
       BigInt(Math.floor(params.deadlineUnixSeconds)),
     ],
-    initialFundWei,
+    params.initialFundWei ?? 0n,
+    TransactionStatus.FINALIZED,
   );
 
 export const cancelTournament = (address: string, tournamentId: number) =>
@@ -130,10 +149,10 @@ export const transferOwnership = (address: string, newOwner: string) =>
   write(address, "transfer_ownership", [newOwner]);
 
 export const joinTournament = (address: string, tournamentId: number, entryFeeWei: bigint) =>
-  write(address, "join_tournament", [tournamentId], entryFeeWei);
+  write(address, "join_tournament", [tournamentId], entryFeeWei, TransactionStatus.FINALIZED);
 
 export const fundTournament = (address: string, tournamentId: number, amountWei: bigint) =>
-  write(address, "fund_tournament", [tournamentId], amountWei);
+  write(address, "fund_tournament", [tournamentId], amountWei, TransactionStatus.FINALIZED);
 
 export const submitTournamentScore = (
   address: string,
@@ -150,7 +169,7 @@ export const finalizeTournament = (address: string, tournamentId: number) =>
   write(address, "finalize_tournament", [tournamentId]);
 
 export const claimPrize = (address: string, tournamentId: number) =>
-  write(address, "claim_prize", [tournamentId]);
+  write(address, "claim_prize", [tournamentId], 0n, TransactionStatus.FINALIZED);
 
 export const claimRefund = (address: string, tournamentId: number) =>
-  write(address, "claim_refund", [tournamentId]);
+  write(address, "claim_refund", [tournamentId], 0n, TransactionStatus.FINALIZED);
