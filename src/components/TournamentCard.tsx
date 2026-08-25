@@ -21,6 +21,8 @@ import {
   formatWeiToGen,
   secondsUntil,
   shortenAddress,
+  toBigInt,
+  toBool,
   toNumber,
 } from "../lib/format";
 
@@ -32,21 +34,17 @@ interface TournamentCardProps {
   isOwner: boolean;
   isConnected: boolean;
   isPlaying: boolean;
-  liveScore: number;
-  hasSubmittedScore?: boolean;
   onTogglePlay: () => void;
-  onScoreChange: (
-    score: number,
-    gameOver: boolean,
-    reachedTarget: boolean,
-    evidence: ReplayEvidence,
-  ) => void;
   onJoin: () => Promise<void>;
-  onSubmitScore: () => Promise<void>;
+  onSubmitScore: (evidence: ReplayEvidence) => Promise<void>;
   onFinalize: () => Promise<void>;
   onClaimPrize: () => Promise<void>;
   onClaimRefund: () => Promise<void>;
   onCancel: () => Promise<void>;
+}
+
+function evidenceSignature(evidence: ReplayEvidence | null): string | null {
+  return evidence ? `${evidence.seed}:${evidence.moves}` : null;
 }
 
 export default function TournamentCard({
@@ -55,10 +53,7 @@ export default function TournamentCard({
   isOwner,
   isConnected,
   isPlaying,
-  liveScore,
-  hasSubmittedScore = false,
   onTogglePlay,
-  onScoreChange,
   onJoin,
   onSubmitScore,
   onFinalize,
@@ -66,6 +61,9 @@ export default function TournamentCard({
   onClaimRefund,
   onCancel,
 }: TournamentCardProps) {
+  const [evidence, setEvidence] = useState<ReplayEvidence | null>(null);
+  const [liveScore, setLiveScore] = useState(0);
+  const [submittedSignature, setSubmittedSignature] = useState<string | null>(null);
   const [pending, setPending] = useState<ActionKey | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -75,13 +73,42 @@ export default function TournamentCard({
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!isPlaying) {
+      setEvidence(null);
+      setLiveScore(0);
+      setSubmittedSignature(null);
+      setActionError(null);
+    }
+  }, [isPlaying]);
+
   const remaining = secondsUntil(t.deadline_ts);
-  const isOpen = !t.is_cancelled && !t.is_finalized && remaining > 0;
-  const isAwaitingFinalize = !t.is_cancelled && !t.is_finalized && remaining <= 0;
+  const isCancelled = toBool(t.is_cancelled);
+  const isFinalized = toBool(t.is_finalized);
+  const isOpen = !isCancelled && !isFinalized && remaining > 0;
+  const isAwaitingFinalize = !isCancelled && !isFinalized && remaining <= 0;
+
+  const hasJoined = toBool(participant?.has_joined);
+  const hasClaimed = toBool(participant?.has_claimed);
+  const prizeAmount = toBigInt(participant?.prize_amount ?? 0);
   const participantCount = toNumber(t.participant_count);
   const maxParticipants = toNumber(t.max_participants);
   const isFull = participantCount >= maxParticipants;
   const prizePool = toNumber(t.prize_pool);
+
+  const currentSignature = evidenceSignature(evidence);
+  const hasPlayedAnyMove = !!evidence && evidence.moves.length > 0;
+  const alreadySubmittedThisRun =
+    currentSignature !== null && currentSignature === submittedSignature;
+
+  const canSubmit =
+    isPlaying &&
+    isConnected &&
+    hasJoined &&
+    hasPlayedAnyMove &&
+    !alreadySubmittedThisRun &&
+    isOpen &&
+    pending === null;
 
   const run = async (key: ActionKey, action: () => Promise<void>) => {
     setPending(key);
@@ -95,9 +122,18 @@ export default function TournamentCard({
     }
   };
 
-  const statusPill = t.is_cancelled ? (
+  const handleSubmit = () => {
+    if (!evidence || !canSubmit) return;
+    const sig = currentSignature;
+    run("submit", async () => {
+      await onSubmitScore(evidence);
+      setSubmittedSignature(sig);
+    });
+  };
+
+  const statusPill = isCancelled ? (
     <span className="pill border-gold-deep/40 text-gold-deep">Cancelled</span>
-  ) : t.is_finalized ? (
+  ) : isFinalized ? (
     <span className="pill border-emerald-500/40 text-emerald-400">Finalized</span>
   ) : isAwaitingFinalize ? (
     <span className="pill border-chain/40 text-chain-soft">Deadline passed</span>
@@ -107,10 +143,14 @@ export default function TournamentCard({
     </span>
   );
 
-  const canFinalize = (isOwner || !!participant?.has_joined) && participantCount > 0;
-  
-  // سازنده اگر استخر شارژ داشته باشد و هیچ بازیکنی نیامده باشد، می‌تواند ریفاند بزند
+  const canFinalize = (isOwner || hasJoined) && participantCount > 0;
   const canOwnerRefundEmpty = isOwner && isAwaitingFinalize && participantCount === 0 && prizePool > 0;
+
+  const submitLabel = alreadySubmittedThisRun
+    ? "Submitted ✓"
+    : pending === "submit"
+      ? "Submitting..."
+      : `Submit score ${liveScore > 0 ? `(${liveScore})` : ""}`;
 
   return (
     <div className="card">
@@ -137,18 +177,18 @@ export default function TournamentCard({
 
       <p className="mt-3 text-xs text-muted">Deadline: {formatUnixSeconds(t.deadline_ts)}</p>
 
-      {participant?.has_joined && (
+      {hasJoined && (
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <span className="pill">Joined</span>
-          {participant.has_submitted && (
-            <span className="pill">Best submitted: {toNumber(participant.score)}</span>
+          {toBool(participant?.has_submitted) && (
+            <span className="pill">Best submitted: {toNumber(participant?.score)}</span>
           )}
-          {toNumber(participant.prize_amount) > 0 && !participant.has_claimed && (
+          {prizeAmount > 0n && !hasClaimed && (
             <span className="pill border-gold/40 text-gold">
-              Prize ready: {formatWeiToGen(participant.prize_amount)} GEN
+              Prize ready: {formatWeiToGen(prizeAmount)} GEN
             </span>
           )}
-          {participant.has_claimed && <span className="pill text-emerald-400">Claimed</span>}
+          {hasClaimed && <span className="pill text-emerald-400">Claimed</span>}
         </div>
       )}
 
@@ -157,7 +197,7 @@ export default function TournamentCard({
       <div className="mt-4 flex flex-wrap gap-2">
         {!isConnected && <p className="text-xs text-muted">Connect your wallet to interact.</p>}
 
-        {isConnected && !t.is_cancelled && isOpen && !participant?.has_joined && !isFull && (
+        {isConnected && !isCancelled && isOpen && !hasJoined && !isFull && (
           <ActionButton
             label="Join tournament"
             icon={<Users size={14} />}
@@ -166,11 +206,11 @@ export default function TournamentCard({
           />
         )}
 
-        {isConnected && !t.is_cancelled && isOpen && !participant?.has_joined && isFull && (
+        {isConnected && !isCancelled && isOpen && !hasJoined && isFull && (
           <p className="text-xs text-muted">Tournament is full.</p>
         )}
 
-        {isConnected && !t.is_cancelled && isOpen && participant?.has_joined && (
+        {isConnected && !isCancelled && isOpen && hasJoined && (
           <>
             <ActionButton
               label={isPlaying ? "Hide game" : "Play"}
@@ -181,17 +221,17 @@ export default function TournamentCard({
             />
             {isPlaying && (
               <ActionButton
-                label={hasSubmittedScore ? "Score Submitted ✓" : `Submit score (${liveScore})`}
+                label={submitLabel}
                 icon={<Send size={14} />}
                 pending={pending === "submit"}
-                disabled={liveScore <= 0 || hasSubmittedScore}
-                onClick={() => run("submit", onSubmitScore)}
+                disabled={!canSubmit}
+                onClick={handleSubmit}
               />
             )}
           </>
         )}
 
-        {isConnected && !t.is_cancelled && isAwaitingFinalize && canFinalize && (
+        {isConnected && !isCancelled && isAwaitingFinalize && canFinalize && (
           <ActionButton
             label="Finalize tournament"
             icon={<Flag size={14} />}
@@ -200,8 +240,7 @@ export default function TournamentCard({
           />
         )}
 
-        {/* دکمه استرداد وجه شارژ اولیه به سازنده در صورت نبود شرکت‌کننده */}
-        {isConnected && canOwnerRefundEmpty && (
+        {isConnected && canOwnerRefundEmpty && !hasClaimed && (
           <ActionButton
             label="Refund empty pool"
             icon={<Undo2 size={14} />}
@@ -211,11 +250,11 @@ export default function TournamentCard({
         )}
 
         {isConnected &&
-          t.is_finalized &&
-          !participant?.has_claimed &&
-          toNumber(participant?.prize_amount) > 0 && (
+          isFinalized &&
+          !hasClaimed &&
+          prizeAmount > 0n && (
             <ActionButton
-              label="Claim prize"
+              label={`Claim prize (${formatWeiToGen(prizeAmount)} GEN)`}
               icon={<Trophy size={14} />}
               pending={pending === "claim"}
               onClick={() => run("claim", onClaimPrize)}
@@ -223,9 +262,9 @@ export default function TournamentCard({
           )}
 
         {isConnected &&
-          t.is_cancelled &&
-          (participant?.has_joined || isOwner) &&
-          !participant?.has_claimed && (
+          isCancelled &&
+          (hasJoined || isOwner) &&
+          !hasClaimed && (
             <ActionButton
               label="Claim refund"
               icon={<Undo2 size={14} />}
@@ -234,7 +273,7 @@ export default function TournamentCard({
             />
           )}
 
-        {isConnected && isOwner && !t.is_cancelled && !t.is_finalized && (
+        {isConnected && isOwner && !isCancelled && !isFinalized && (
           <ActionButton
             label="Cancel tournament"
             icon={<Ban size={14} />}
@@ -249,9 +288,10 @@ export default function TournamentCard({
         <div className="mt-4 border-t border-surface-border pt-4">
           <Game2048
             compact
-            onScoreChange={(score, gameOver, reachedTarget, evidence) =>
-              onScoreChange(score, gameOver, reachedTarget, evidence)
-            }
+            onScoreChange={(score, _gameOver, _reachedTarget, ev) => {
+              setLiveScore(score);
+              setEvidence(ev);
+            }}
           />
         </div>
       )}
