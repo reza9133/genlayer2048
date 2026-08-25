@@ -1,116 +1,114 @@
 # 2048 On-Chain — GenLayer Tournament Platform
 
-A Vite + React + TypeScript + Tailwind frontend for the `Game2048Platform` GenLayer
-Intelligent Contract: a free-play global leaderboard plus payable, time-boxed
-tournaments with pull-payment prize claims.
+A Vite + React + TypeScript + Tailwind frontend for the `Game2048Platform` GenLayer Intelligent Contract: a free-play global leaderboard plus payable, time-boxed tournaments with automated prize distribution.
 
 - **Contract:** `0x085B438e7A182eaD901931e4735Bb19f329f886A`
 - **Network:** GenLayer Testnet Bradbury (chain ID `4221`, RPC `https://rpc-bradbury.genlayer.com`)
-- **SDK:** [`genlayer-js`](https://github.com/genlayerlabs/genlayer-js) (a read client for queries, a wallet-bound write client for transactions)
+- **SDK:** [`genlayer-js`](https://github.com/genlayerlabs/genlayer-js) (read client for RPC queries, wallet-bound write client for signing transactions)
+
+---
+
+## Architecture & Validator Model
+
+Scores are **never accepted as bare client-supplied numbers**. The contract implements a full **Deterministic Replay Validator**:
+
+1. **Replayable Score Evidence:**
+   - The frontend seeds a 32-bit PRNG (`xorshift32`) for all random tile spawns and logs the exact sequence of moves (`U`, `D`, `L`, `R`).
+   - When submitting a score, the client only sends the initial `seed` and the `moves` string.
+   - The contract independently runs the identical deterministic 2048 engine, replays the move history, and derives the score directly on-chain. GenVM validators reach consensus on the verified replay execution before accepting the transaction.
+
+2. **Strict Deadline Enforcement:**
+   - All tournament interactions rely on GenVM's deterministic transaction time (`datetime.datetime.now()`).
+   - Joins and score submissions are strictly rejected once the deadline passes.
+   - Finalization cannot be triggered before the deadline expires.
+
+3. **Native Fund Transfers:**
+   - Prize claims (`claim_prize`) and cancelled tournament refunds (`claim_refund`) execute native GEN transfers via `gl.get_contract_at(player).emit_transfer(value=amount)`.
+
+---
 
 ## Features
 
-- **Wallet integration** — connect MetaMask, auto-detect the wrong network, and switch/add
-  GenLayer Bradbury with one click (`src/hooks/useWallet.ts`).
-- **Playable 2048** — full keyboard + swipe-controlled game (`src/components/Game2048.tsx`),
-  no game-engine dependency.
-- **Free play** — submit your score any time via `submit_score`; live global leaderboard via
-  `get_leaderboard`.
-- **Tournaments** — dashboard of all tournaments (`get_tournament` / `list_tournament_ids`),
-  owner-only creation, `join_tournament` (payable), `submit_tournament_score`,
-  `finalize_tournament` (callable by anyone once the deadline passes), and pull-payment
-  `claim_prize` / `claim_refund`.
+- **Wallet integration** — Connect MetaMask, detect wrong networks, and switch/add GenLayer Bradbury with one click (`src/hooks/useWallet.ts`).
+- **Playable 2048 with Deterministic Engine** — Pure keyboard and touch-swipe controls synced with an on-chain reproducible PRNG (`src/components/Game2048.tsx`).
+- **Free Play** — Submit replay evidence via `submit_score` and compete on the live global leaderboard (`get_leaderboard`).
+- **Tournaments** — Dashboard of all tournaments (`get_tournament` / `list_tournament_ids`), owner-only creation (`create_tournament`), payable entries (`join_tournament`), deadline-enforced submissions (`submit_tournament_score`), public finalization (`finalize_tournament`), and direct prize/refund claims (`claim_prize` / `claim_refund`).
 
-## Project structure
+---
+
+## Project Structure
+
 
 ```
+
 src/
-  genlayer.ts               # client setup + typed wrapper for every contract method
-  types.ts                  # TS types mirroring the contract's view dataclasses
-  lib/format.ts              # wei↔GEN conversion, address/date formatting
-  hooks/useWallet.ts          # MetaMask connect + Bradbury network switch
-  components/
-    Game2048.tsx             # the playable game grid
-    WalletButton.tsx
-    FreePlay.tsx
-    Leaderboard.tsx
-    TournamentDashboard.tsx
-    TournamentCard.tsx
-    CreateTournamentModal.tsx
-  App.tsx
+genlayer.ts                 # client setup + typed wrappers for contract methods
+types.ts                    # TypeScript types & ReplayEvidence interfaces
+lib/format.ts               # wei↔GEN conversion, address & date helpers
+hooks/useWallet.ts          # MetaMask connect + Bradbury network switch
+components/
+Game2048.tsx              # playable 2048 grid with xorshift32 PRNG & move logger
+WalletButton.tsx
+FreePlay.tsx              # free play mode with evidence submission
+Leaderboard.tsx           # global verified high score leaderboard
+TournamentDashboard.tsx   # tournament listings & management
+TournamentCard.tsx        # tournament card with embedded gameplay & actions
+CreateTournamentModal.tsx # tournament creation modal (owner only)
+App.tsx
+
 ```
 
-## Run locally
+---
+
+## Run Locally
 
 Requires Node.js 18+.
 
 ```bash
 npm install
-cp .env.example .env      # optional — defaults to the address above if you skip this
+cp .env.example .env
 npm run dev
+
 ```
 
-Open `http://localhost:5173`, then click **Connect Wallet**. If MetaMask isn't already on
-GenLayer Bradbury, you'll be prompted to switch (or add the network automatically).
+Open `http://localhost:5173` and connect your wallet. Make sure you are connected to the GenLayer Bradbury Testnet. Testnet GEN can be obtained from the [GenLayer Testnet Faucet](https://testnet-faucet.genlayer.foundation).
 
-You'll need testnet GEN to pay entry fees or gas — get some from the
-[GenLayer testnet faucet](https://testnet-faucet.genlayer.foundation).
+### Environment Variables
 
-### Environment variables
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VITE_CONTRACT_ADDRESS` | `0x085B438e7A182eaD901931e4735Bb19f329f886A` | Deployed contract address |
 
-| Variable                | Default                                     | Description                    |
-| ------------------------ | -------------------------------------------- | ------------------------------- |
-| `VITE_CONTRACT_ADDRESS`  | `0x085B438e7A182eaD901931e4735Bb19f329f886A` | Deployed contract address       |
+---
 
-## Build
+## Build & Deploy
 
 ```bash
-npm run build   # runs a type check, then builds to dist/
-npm run preview # serve the production build locally
+npm run build   # type checks and builds to dist/
+npm run preview # serves the production build locally
+
 ```
 
-## Deploy to Cloudflare Pages
+### Deploy to Cloudflare Pages
 
-**Option A — Git integration (recommended)**
+1. Push the repository to GitHub.
+2. In Cloudflare Dashboard: **Workers & Pages → Create → Pages → Connect to Git**.
+3. Build Configuration:
+* **Framework preset:** Vite
+* **Build command:** `npm run build`
+* **Build output directory:** `dist`
 
-1. Push this project to a GitHub repository.
-2. In the Cloudflare dashboard: **Workers & Pages → Create → Pages → Connect to Git**, and
-   select the repo.
-3. Build settings:
-   - **Framework preset:** Vite
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-4. Add an environment variable if you want to point at a different contract:
-   `VITE_CONTRACT_ADDRESS`.
-5. Save and deploy. Cloudflare will rebuild automatically on every push.
 
-**Option B — Direct upload with Wrangler**
+4. Set the environment variable `VITE_CONTRACT_ADDRESS` to `0x085B438e7A182eaD901931e4735Bb19f329f886A`.
+5. Deploy.
 
-```bash
-npm install -g wrangler
-npm run build
-wrangler pages deploy dist --project-name genlayer-2048
+---
+
+## Contract Permissions & Lifecycle
+
+* **Finalization:** `finalize_tournament` is callable by anyone once the deadline has passed, ensuring tournaments can be resolved without dependency on the creator.
+* **Admin Control:** Tournament creation and cancellation are restricted to the contract `owner`.
+
 ```
 
-The included `public/_redirects` file (`/* /index.html 200`) is copied into `dist/` on build
-so client-side routing/deep links don't 404 on Cloudflare Pages.
-
-## Notes on the contract's data types
-
-The contract's `u256`/`u32` fields are read with `jsonSafeReturn: true`, so they arrive in the
-frontend as plain strings — normalized everywhere via `toBigInt()` / `toNumber()` in
-`src/lib/format.ts` rather than assumed to be JS numbers (some values, like `entry_fee` in wei,
-exceed `Number.MAX_SAFE_INTEGER`). Wei amounts are converted to/from human GEN amounts with
-`parseGenToWei()` / `formatWeiToGen()`.
-
-## Caveats (matches the contract's own design)
-
-- Scores are **self-reported** — `submit_score` / `submit_tournament_score` just enforce a
-  sanity ceiling (`get_max_plausible_score`), not verified gameplay. This is a casual
-  leaderboard/tournament system, not an anti-cheat one — the footer in the app says so.
-- `finalize_tournament` is callable by *anyone* once the deadline passes (by design, so
-  tournaments don't get stuck waiting on the owner) — the "Finalize" button appears for any
-  connected wallet once a tournament's countdown hits zero.
-- Tournament creation and cancellation are gated by the contract's `owner` — the "Create
-  tournament" button and each card's "Cancel" action only render for the connected address
-  that matches `get_owner()`.
+```
