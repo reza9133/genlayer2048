@@ -16,7 +16,7 @@ import {
   listTournamentIds,
   submitTournamentScore,
 } from "../genlayer";
-import type { ParticipantStatusView, TournamentView } from "../types";
+import type { ParticipantStatusView, ReplayEvidence, TournamentView } from "../types";
 import type { WalletState } from "../hooks/useWallet";
 import { formatWeiToGen, toBigInt, toNumber } from "../lib/format";
 
@@ -44,6 +44,10 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTournamentId, setActiveTournamentId] = useState<number | null>(null);
   const [liveScore, setLiveScore] = useState(0);
+  // Replayable proof (seed + move sequence) backing `liveScore`. The
+  // contract replays this itself rather than trusting liveScore directly —
+  // see submit_tournament_score in 2048.py.
+  const [liveEvidence, setLiveEvidence] = useState<ReplayEvidence | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,9 +107,12 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
     await load();
   };
 
-  const handleSubmitScore = async (t: TournamentView, score: number) => {
+  const handleSubmitScore = async (t: TournamentView) => {
     const address = requireAddress();
-    await submitTournamentScore(address, toNumber(t.tournament_id), score);
+    if (!liveEvidence) {
+      throw new Error("Play at least one move before submitting a score.");
+    }
+    await submitTournamentScore(address, toNumber(t.tournament_id), liveEvidence);
     await load();
   };
 
@@ -177,10 +184,20 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
               onTogglePlay={() => {
                 setActiveTournamentId(isPlaying ? null : id);
                 setLiveScore(0);
+                setLiveEvidence(null);
               }}
-              onScoreChange={(score) => setLiveScore(score)}
+              // NOTE: TournamentCard.tsx (not shown here) embeds <Game2048 />
+              // and forwards its onScoreChange prop upward. Game2048's
+              // onScoreChange now carries a 4th `evidence` argument
+              // ({ seed, moves }) — TournamentCard's own onScoreChange prop
+              // needs to accept and forward that same 4th argument so it
+              // reaches this handler unmodified.
+              onScoreChange={(score, _gameOver, _reachedTarget, evidence) => {
+                setLiveScore(score);
+                setLiveEvidence(evidence);
+              }}
               onJoin={() => handleJoin(tournament)}
-              onSubmitScore={() => handleSubmitScore(tournament, liveScore)}
+              onSubmitScore={() => handleSubmitScore(tournament)}
               onFinalize={() => handleFinalize(tournament)}
               onClaimPrize={() => handleClaimPrize(tournament)}
               onClaimRefund={() => handleClaimRefund(tournament)}
