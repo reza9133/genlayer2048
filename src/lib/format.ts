@@ -1,74 +1,95 @@
-/**
- * Utility functions for numeric conversions, address formatting,
- * Wei/GEN parsing, and human-readable countdowns across the 2048 dApp.
- */
+import type { Numeric } from "../types";
 
-export function toNumber(val: any): number {
-  if (val === undefined || val === null) return 0;
-  if (typeof val === "number") return val;
-  if (typeof val === "bigint") return Number(val);
-  if (typeof val === "string") {
-    const clean = val.trim();
-    if (clean.startsWith("0x") || clean.startsWith("0X")) {
-      const parsedHex = parseInt(clean, 16);
-      return isNaN(parsedHex) ? 0 : parsedHex;
-    }
-    const parsed = parseInt(clean, 10);
-    return isNaN(parsed) ? 0 : parsed;
-  }
-  if (typeof val === "object") {
-    if ("value" in val) return toNumber(val.value);
-    if ("hex" in val) return parseInt(val.hex, 16);
-  }
-  return Number(val) || 0;
-}
+const WEI_PER_GEN = 1_000_000_000_000_000_000n;
 
-export function toBigInt(val: any): bigint {
-  if (val === undefined || val === null) return 0n;
-  if (typeof val === "bigint") return val;
-  if (typeof val === "number") return BigInt(Math.floor(val));
-  if (typeof val === "string") {
+export function toBigInt(value: Numeric | null | undefined): bigint {
+  if (value === null || value === undefined) return 0n;
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return 0n;
+    return BigInt(Math.trunc(value));
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return 0n;
     try {
-      const clean = val.trim();
-      if (!clean) return 0n;
-      if (clean.startsWith("0x") || clean.startsWith("0X")) {
-        return BigInt(clean);
-      }
-      return BigInt(clean);
+      if (trimmed.startsWith("0x") || trimmed.startsWith("0X")) return BigInt(trimmed);
+      const withoutFraction = trimmed.split(".")[0];
+      return BigInt(withoutFraction);
     } catch {
       return 0n;
     }
   }
-  if (typeof val === "object") {
-    if ("value" in val) return toBigInt(val.value);
-    if ("hex" in val) return BigInt(val.hex);
-  }
-  return 0n;
-}
-
-export function formatWeiToGen(wei: any): string {
-  const b = toBigInt(wei);
-  const ether = Number(b) / 1e18;
-  return ether.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 4,
-  });
-}
-
-export function parseGenToWei(genStr: string): bigint {
   try {
-    const clean = genStr.trim();
-    if (!clean) return 0n;
-    const parts = clean.split(".");
-    const whole = BigInt(parts[0] || "0") * 10n ** 18n;
-    if (parts.length > 1) {
-      const decimals = parts[1].padEnd(18, "0").slice(0, 18);
-      return whole + BigInt(decimals);
-    }
-    return whole;
+    return toBigInt(String(value));
   } catch {
     return 0n;
   }
+}
+
+export function toNumber(value: Numeric | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return 0;
+    const n = Number(trimmed);
+    if (!Number.isNaN(n)) return n;
+    try {
+      return Number(toBigInt(trimmed));
+    } catch {
+      return 0;
+    }
+  }
+  try {
+    return toNumber(String(value));
+  } catch {
+    return 0;
+  }
+}
+
+export function toBool(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "bigint") return value !== 0n;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "1";
+  }
+  return Boolean(value);
+}
+
+export function formatWeiToGen(value: Numeric | null | undefined, maxDecimals = 4): string {
+  const wei = toBigInt(value);
+  const negative = wei < 0n;
+  const abs = negative ? -wei : wei;
+
+  const whole = abs / WEI_PER_GEN;
+  const remainder = abs % WEI_PER_GEN;
+
+  if (remainder === 0n) {
+    return `${negative ? "-" : ""}${whole.toString()}`;
+  }
+
+  const fractionDigits = remainder.toString().padStart(18, "0").slice(0, maxDecimals);
+  const trimmed = fractionDigits.replace(/0+$/, "");
+  if (trimmed === "") {
+    return `${negative ? "-" : ""}${whole.toString()}`;
+  }
+  return `${negative ? "-" : ""}${whole.toString()}.${trimmed}`;
+}
+
+export function parseGenToWei(input: string): bigint {
+  const trimmed = input.trim();
+  if (trimmed === "") return 0n;
+  if (!/^\d*\.?\d*$/.test(trimmed) || trimmed === ".") {
+    throw new Error(`"${input}" is not a valid GEN amount`);
+  }
+  const [wholePart, fractionPart = ""] = trimmed.split(".");
+  const whole = wholePart === "" ? 0n : BigInt(wholePart);
+  const fraction = fractionPart.slice(0, 18).padEnd(18, "0");
+  return whole * WEI_PER_GEN + (fraction === "" ? 0n : BigInt(fraction));
 }
 
 export function formatUnixSeconds(sec: any): string {
