@@ -41,6 +41,19 @@ MAX_REPLAY_MOVES = u32(4000)  # replay compute/gas bound
 
 
 # ---------------------------------------------------------------------------
+# EVM Account interface for external transfers (EOA / MetaMask)
+# ---------------------------------------------------------------------------
+
+@gl.evm.contract_interface
+class _Recipient:
+    class View:
+        pass
+
+    class Write:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Persistent storage dataclasses
 # ---------------------------------------------------------------------------
 
@@ -628,9 +641,8 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        # --- Interaction: actually move the funds ---
-        recipient = gl.get_contract_at(player)
-        recipient.emit_transfer(value=amount)
+        # --- Interaction: actually move the funds to EOA / MetaMask ---
+        _Recipient(Address(player)).emit_transfer(value=amount)
 
     @gl.public.write
     def claim_refund(self, tournament_id: u32) -> None:
@@ -673,9 +685,8 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        # --- Interaction: actually move the funds ---
-        recipient = gl.get_contract_at(player)
-        recipient.emit_transfer(value=refund_amount)
+        # --- Interaction: actually move the funds to EOA / MetaMask ---
+        _Recipient(Address(player)).emit_transfer(value=refund_amount)
 
     @gl.public.write
     def transfer_ownership(self, new_owner: Address) -> None:
