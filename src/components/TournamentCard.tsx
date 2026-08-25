@@ -14,7 +14,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import Game2048 from "./Game2048";
-import type { ParticipantStatusView, TournamentView } from "../types";
+import type { ParticipantStatusView, ReplayEvidence, TournamentView } from "../types";
 import {
   formatCountdown,
   formatUnixSeconds,
@@ -34,7 +34,12 @@ interface TournamentCardProps {
   isPlaying: boolean;
   liveScore: number;
   onTogglePlay: () => void;
-  onScoreChange: (score: number) => void;
+  onScoreChange: (
+    score: number,
+    gameOver: boolean,
+    reachedTarget: boolean,
+    evidence: ReplayEvidence,
+  ) => void;
   onJoin: () => Promise<void>;
   onSubmitScore: () => Promise<void>;
   onFinalize: () => Promise<void>;
@@ -221,7 +226,12 @@ export default function TournamentCard({
 
       {isPlaying && (
         <div className="mt-4 border-t border-surface-border pt-4">
-          <Game2048 compact onScoreChange={(score) => onScoreChange(score)} />
+          <Game2048
+            compact
+            onScoreChange={(score, gameOver, reachedTarget, evidence) =>
+              onScoreChange(score, gameOver, reachedTarget, evidence)
+            }
+          />
         </div>
       )}
     </div>
