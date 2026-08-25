@@ -3,23 +3,30 @@ import { Send, Loader2, CheckCircle2 } from "lucide-react";
 import Game2048 from "./Game2048";
 import Leaderboard from "./Leaderboard";
 import { submitScore } from "../genlayer";
+import type { ReplayEvidence } from "../types";
 import type { WalletState } from "../hooks/useWallet";
 
 export default function FreePlay({ wallet }: { wallet: WalletState }) {
   const [liveScore, setLiveScore] = useState(0);
+  const [liveEvidence, setLiveEvidence] = useState<ReplayEvidence | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastSubmitted, setLastSubmitted] = useState<number | null>(null);
   const [leaderboardKey, setLeaderboardKey] = useState(0);
 
-  const canSubmit = wallet.address && wallet.isCorrectNetwork && liveScore > 0 && !submitting;
+  const canSubmit =
+    wallet.address &&
+    wallet.isCorrectNetwork &&
+    liveScore > 0 &&
+    liveEvidence !== null &&
+    !submitting;
 
   const handleSubmit = async () => {
-    if (!wallet.address) return;
+    if (!wallet.address || !liveEvidence) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await submitScore(wallet.address, liveScore);
+      await submitScore(wallet.address, liveEvidence);
       setLastSubmitted(liveScore);
       setLeaderboardKey((k) => k + 1);
     } catch (err: any) {
@@ -32,7 +39,12 @@ export default function FreePlay({ wallet }: { wallet: WalletState }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="card flex flex-col items-center">
-        <Game2048 onScoreChange={(score) => setLiveScore(score)} />
+        <Game2048
+          onScoreChange={(score, _gameOver, _reachedTarget, evidence) => {
+            setLiveScore(score);
+            setLiveEvidence(evidence);
+          }}
+        />
 
         <div className="mt-5 flex w-full flex-col items-center gap-2 border-t border-surface-border pt-5">
           {!wallet.address ? (
