@@ -19,7 +19,7 @@ import {
 } from "../genlayer";
 import type { ParticipantStatusView, ReplayEvidence, TournamentView } from "../types";
 import type { WalletState } from "../hooks/useWallet";
-import { formatWeiToGen, parseGenToWei, toBigInt, toNumber } from "../lib/format";
+import { formatWeiToGen, parseGenToWei, toBigInt, toBool, toNumber } from "../lib/format";
 
 interface Row {
   tournament: TournamentView;
@@ -28,9 +28,9 @@ interface Row {
 
 function sortRows(rows: Row[]): Row[] {
   const rank = (t: TournamentView) => {
-    if (t.is_cancelled) return 3;
-    if (t.is_finalized) return 2;
-    const open = Number(t.deadline_ts) > Math.floor(Date.now() / 1000);
+    if (toBool(t.is_cancelled)) return 3;
+    if (toBool(t.is_finalized)) return 2;
+    const open = toNumber(t.deadline_ts) > Math.floor(Date.now() / 1000);
     return open ? 0 : 1;
   };
   return [...rows].sort((a, b) => rank(a.tournament) - rank(b.tournament));
@@ -44,9 +44,6 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
   const [defaultEntryFeeGen, setDefaultEntryFeeGen] = useState("0.05");
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTournamentId, setActiveTournamentId] = useState<number | null>(null);
-  const [liveScore, setLiveScore] = useState(0);
-  const [liveEvidence, setLiveEvidence] = useState<ReplayEvidence | null>(null);
-  const [hasSubmittedCurrentRun, setHasSubmittedCurrentRun] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,9 +88,7 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
       const validTournaments = tournaments.filter(
         (t): t is TournamentView =>
           t !== null &&
-          (t.exists === true ||
-            String(t.exists) === "true" ||
-            toNumber(t.tournament_id) > 0),
+          (toBool(t.exists) || toNumber(t.tournament_id) > 0),
       );
 
       let participants: (ParticipantStatusView | null)[] = validTournaments.map(() => null);
@@ -133,7 +128,7 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
 
   const handleCreate = async (input: CreateTournamentInput) => {
     const address = requireAddress();
-    const initialFundWei = input.initialFundGen ? parseGenToWei(input.initialFundGen) : 0n;
+    const initialFundWei = input.initialFundWei ?? (input.initialFundGen ? parseGenToWei(input.initialFundGen) : 0n);
 
     await createTournament(
       address,
@@ -143,8 +138,8 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
         winnerCount: input.winnerCount,
         entryFeeWei: input.entryFeeWei,
         deadlineUnixSeconds: input.deadlineUnixSeconds,
+        initialFundWei,
       },
-      initialFundWei,
     );
 
     await load();
@@ -156,13 +151,9 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
     await load();
   };
 
-  const handleSubmitScore = async (t: TournamentView) => {
+  const handleSubmitScore = async (t: TournamentView, evidence: ReplayEvidence) => {
     const address = requireAddress();
-    if (!liveEvidence || hasSubmittedCurrentRun) {
-      throw new Error("Play a new run or make a new move before submitting.");
-    }
-    await submitTournamentScore(address, toNumber(t.tournament_id), liveEvidence);
-    setHasSubmittedCurrentRun(true);
+    await submitTournamentScore(address, toNumber(t.tournament_id), evidence);
     await load();
   };
 
@@ -230,21 +221,9 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
               isOwner={isOwner}
               isConnected={!!wallet.address && wallet.isCorrectNetwork}
               isPlaying={isPlaying}
-              liveScore={isPlaying ? liveScore : 0}
-              hasSubmittedScore={isPlaying ? hasSubmittedCurrentRun : false}
-              onTogglePlay={() => {
-                setActiveTournamentId(isPlaying ? null : id);
-                setLiveScore(0);
-                setLiveEvidence(null);
-                setHasSubmittedCurrentRun(false);
-              }}
-              onScoreChange={(score, _gameOver, _reachedTarget, evidence) => {
-                setLiveScore(score);
-                setLiveEvidence(evidence);
-                setHasSubmittedCurrentRun(false);
-              }}
+              onTogglePlay={() => setActiveTournamentId(isPlaying ? null : id)}
               onJoin={() => handleJoin(tournament)}
-              onSubmitScore={() => handleSubmitScore(tournament)}
+              onSubmitScore={(evidence) => handleSubmitScore(tournament, evidence)}
               onFinalize={() => handleFinalize(tournament)}
               onClaimPrize={() => handleClaimPrize(tournament)}
               onClaimRefund={() => handleClaimRefund(tournament)}
