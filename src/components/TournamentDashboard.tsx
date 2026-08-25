@@ -12,6 +12,7 @@ import {
   getOwner,
   getParticipantStatus,
   getTournament,
+  getTournamentCount,
   joinTournament,
   listTournamentIds,
   submitTournamentScore,
@@ -51,41 +52,63 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
     setLoading(true);
     setError(null);
     try {
-      const [rawIds, ownerAddr, defaultFeeWei] = await Promise.all([
-        listTournamentIds(),
-        getOwner(),
-        getDefaultEntryFee(),
+      const [rawIds, rawCount, ownerAddr, defaultFeeWei] = await Promise.all([
+        listTournamentIds().catch(() => []),
+        getTournamentCount().catch(() => "0"),
+        getOwner().catch(() => ""),
+        getDefaultEntryFee().catch(() => "0"),
       ]);
+
       setOwner(ownerAddr);
       setDefaultEntryFeeGen(formatWeiToGen(defaultFeeWei));
 
-      // تبدیل امن تمام آی‌دی‌ها به عدد
-      const ids = (rawIds ?? [])
-        .map((id) => Number(id))
-        .filter((id) => !isNaN(id) && id > 0);
+      const count = toNumber(rawCount);
+      const parsedIds = new Set<number>();
+
+      if (Array.isArray(rawIds)) {
+        for (const item of rawIds) {
+          const num = toNumber(item);
+          if (num > 0) parsedIds.add(num);
+        }
+      }
+
+      for (let i = 1; i <= count; i++) {
+        parsedIds.add(i);
+      }
+
+      const idList = Array.from(parsedIds).sort((a, b) => a - b);
 
       const tournaments = await Promise.all(
-        ids.map((id) => getTournament(id)),
+        idList.map(async (id) => {
+          try {
+            return await getTournament(id);
+          } catch {
+            return null;
+          }
+        }),
       );
 
-      let participants: (ParticipantStatusView | null)[] = tournaments.map(() => null);
+      const validTournaments = tournaments.filter(
+        (t): t is TournamentView =>
+          t !== null &&
+          (t.exists === true ||
+            String(t.exists) === "true" ||
+            toNumber(t.tournament_id) > 0),
+      );
+
+      let participants: (ParticipantStatusView | null)[] = validTournaments.map(() => null);
       if (wallet.address) {
         participants = await Promise.all(
-          tournaments.map((t) =>
-            getParticipantStatus(toNumber(t.tournament_id), wallet.address!),
+          validTournaments.map((t) =>
+            getParticipantStatus(toNumber(t.tournament_id), wallet.address!).catch(() => null),
           ),
         );
       }
 
-      const nextRows: Row[] = tournaments
-        .filter(
-          (t) =>
-            t &&
-            (t.exists === true ||
-              String(t.exists) === "true" ||
-              toNumber(t.tournament_id) > 0),
-        )
-        .map((t, i) => ({ tournament: t, participant: participants[i] }));
+      const nextRows: Row[] = validTournaments.map((t, i) => ({
+        tournament: t,
+        participant: participants[i],
+      }));
 
       setRows(sortRows(nextRows));
     } catch (err: any) {
