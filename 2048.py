@@ -33,6 +33,19 @@ MAX_REPLAY_MOVES = u32(4000)  # replay compute/gas bound
 
 
 # ---------------------------------------------------------------------------
+# EVM Contract Interface for Value Transfers to EOAs / MetaMask
+# ---------------------------------------------------------------------------
+
+@gl.evm.contract_interface
+class _Recipient:
+    class View:
+        pass
+
+    class Write:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Persistent storage dataclasses
 # ---------------------------------------------------------------------------
 
@@ -316,11 +329,11 @@ class Game2048Platform(gl.Contract):
     ) -> u32:
         self._require_owner()
 
+        initial_pool = u256(gl.message.value)
         max_participants = u32(max_participants)
         winner_count = u32(winner_count)
         entry_fee = u256(entry_fee)
         deadline_timestamp = u256(deadline_timestamp)
-        initial_pool = u256(gl.message.value)
 
         if len(name) == 0:
             raise gl.vm.UserError("Tournament name cannot be empty")
@@ -608,8 +621,8 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        recipient = gl.get_contract_at(player)
-        recipient.emit_transfer(value=amount)
+        # Standard EVM Interface external transfer for EOA / MetaMask[cite: 20]
+        _Recipient(Address(player)).emit_transfer(value=amount)
 
     @gl.public.write
     def claim_refund(self, tournament_id: u32) -> None:
@@ -621,21 +634,24 @@ class Game2048Platform(gl.Contract):
         action_key = f"{tid_str}_{player_str}"
 
         t = self._get_tournament_or_raise(tournament_id)
-        if not t.is_cancelled:
-            raise gl.vm.UserError("Tournament was not cancelled")
+        now_ts = self._now_ts()
+        is_past_deadline = int(now_ts) >= int(t.deadline_ts)
+        is_empty = int(t.participant_count) == 0
+        is_creator = (player == t.creator or player == self.owner)
+        has_joined = self.tournament_joined.get(action_key, False)
+
+        # Allows refund if cancelled OR if deadline passed with 0 participants
+        if not t.is_cancelled and not (is_creator and is_past_deadline and is_empty):
+            raise gl.vm.UserError("Tournament is not cancelled or eligible for refund")
 
         if self.tournament_claimed.get(action_key, False):
             raise gl.vm.UserError("Refund already claimed")
 
-        is_creator = (player == t.creator or player == self.owner)
-        has_joined = self.tournament_joined.get(action_key, False)
-
         if not is_creator and not has_joined:
-            raise gl.vm.UserError("You have no funds to claim from this cancelled tournament")
+            raise gl.vm.UserError("You have no funds to claim from this tournament")
 
-        # Creator recovers remaining prize pool; players recover entry fee
         refund_amount = u256(0)
-        if is_creator and int(t.participant_count) == 0:
+        if is_creator and is_empty:
             refund_amount = t.prize_pool
         elif has_joined:
             refund_amount = t.entry_fee
@@ -660,8 +676,8 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        recipient = gl.get_contract_at(player)
-        recipient.emit_transfer(value=refund_amount)
+        # Standard EVM Interface external transfer for EOA / MetaMask[cite: 20]
+        _Recipient(Address(player)).emit_transfer(value=refund_amount)
 
     @gl.public.write
     def transfer_ownership(self, new_owner: Address) -> None:
