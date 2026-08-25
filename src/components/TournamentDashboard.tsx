@@ -8,7 +8,6 @@ import {
   cancelTournament,
   createTournament,
   finalizeTournament,
-  fundTournament,
   getDefaultEntryFee,
   getOwner,
   getParticipantStatus,
@@ -96,22 +95,20 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
 
   const handleCreate = async (input: CreateTournamentInput) => {
     const address = requireAddress();
-    await createTournament(address, {
-      name: input.name,
-      maxParticipants: input.maxParticipants,
-      winnerCount: input.winnerCount,
-      entryFeeWei: input.entryFeeWei,
-      deadlineUnixSeconds: input.deadlineUnixSeconds,
-    });
+    const initialFundWei = input.initialFundGen ? parseGenToWei(input.initialFundGen) : 0n;
 
-    if (input.initialFundGen) {
-      const ids = await listTournamentIds();
-      const latestId = ids[ids.length - 1];
-      if (latestId) {
-        const fundWei = parseGenToWei(input.initialFundGen);
-        await fundTournament(address, Number(latestId), fundWei);
-      }
-    }
+    // Single transaction: creates tournament and sends initial fund value together
+    await createTournament(
+      address,
+      {
+        name: input.name,
+        maxParticipants: input.maxParticipants,
+        winnerCount: input.winnerCount,
+        entryFeeWei: input.entryFeeWei,
+        deadlineUnixSeconds: input.deadlineUnixSeconds,
+      },
+      initialFundWei,
+    );
 
     await load();
   };
