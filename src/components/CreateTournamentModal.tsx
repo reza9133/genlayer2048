@@ -8,6 +8,7 @@ export interface CreateTournamentInput {
   winnerCount: number;
   entryFeeWei: bigint;
   deadlineUnixSeconds: number;
+  initialFundGen?: string;
 }
 
 interface CreateTournamentModalProps {
@@ -20,7 +21,6 @@ interface CreateTournamentModalProps {
 function defaultDeadline(): string {
   const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
   d.setSeconds(0, 0);
-  // datetime-local expects local time without timezone/seconds.
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
     d.getMinutes(),
@@ -37,6 +37,7 @@ export default function CreateTournamentModal({
   const [maxParticipants, setMaxParticipants] = useState(20);
   const [winnerCount, setWinnerCount] = useState(3);
   const [entryFee, setEntryFee] = useState(defaultEntryFeeGen);
+  const [initialFund, setInitialFund] = useState("0");
   const [deadline, setDeadline] = useState(defaultDeadline());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function CreateTournamentModal({
         winnerCount,
         entryFeeWei: parseGenToWei(entryFee),
         deadlineUnixSeconds,
+        initialFundGen: initialFund && parseFloat(initialFund) > 0 ? initialFund : undefined,
       });
       onClose();
     } catch (err: any) {
@@ -121,16 +123,28 @@ export default function CreateTournamentModal({
             </div>
           </div>
 
-          <div>
-            <label className="label">Entry fee (GEN)</label>
-            <input
-              className="input"
-              value={entryFee}
-              onChange={(e) => setEntryFee(e.target.value)}
-              placeholder="0.05"
-              inputMode="decimal"
-              required
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Entry fee (GEN)</label>
+              <input
+                className="input"
+                value={entryFee}
+                onChange={(e) => setEntryFee(e.target.value)}
+                placeholder="0.05"
+                inputMode="decimal"
+                required
+              />
+            </div>
+            <div>
+              <label className="label">Initial pool (GEN)</label>
+              <input
+                className="input"
+                value={initialFund}
+                onChange={(e) => setInitialFund(e.target.value)}
+                placeholder="0 (Optional)"
+                inputMode="decimal"
+              />
+            </div>
           </div>
 
           <div>
