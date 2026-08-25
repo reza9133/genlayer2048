@@ -9,7 +9,7 @@ import type {
 } from "./types";
 
 export const CONTRACT_ADDRESS = (import.meta.env.VITE_CONTRACT_ADDRESS ||
-  "0x5E38c0389DbF553bD54eA962521f11be145c1C3F") as `0x${string}`;
+  "0x54233ca9929aA316E0bAc510666929215800DE55") as `0x${string}`;
 
 export const CHAIN = testnetBradbury;
 export const NETWORK_NAME = "testnetBradbury" as const;
