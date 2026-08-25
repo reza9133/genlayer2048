@@ -4,7 +4,7 @@ A Vite + React + TypeScript + Tailwind frontend for the `Game2048Platform` GenLa
 Intelligent Contract: a free-play global leaderboard plus payable, time-boxed
 tournaments with pull-payment prize claims.
 
-- **Contract:** `0x63dd126CEE689771597c855552D44376E52cD8D8`
+- **Contract:** `0x085B438e7A182eaD901931e4735Bb19f329f886A`
 - **Network:** GenLayer Testnet Bradbury (chain ID `4221`, RPC `https://rpc-bradbury.genlayer.com`)
 - **SDK:** [`genlayer-js`](https://github.com/genlayerlabs/genlayer-js) (a read client for queries, a wallet-bound write client for transactions)
 
@@ -60,7 +60,7 @@ You'll need testnet GEN to pay entry fees or gas — get some from the
 
 | Variable                | Default                                     | Description                    |
 | ------------------------ | -------------------------------------------- | ------------------------------- |
-| `VITE_CONTRACT_ADDRESS`  | `0x63dd126CEE689771597c855552D44376E52cD8D8` | Deployed contract address       |
+| `VITE_CONTRACT_ADDRESS`  | `0x085B438e7A182eaD901931e4735Bb19f329f886A` | Deployed contract address       |
 
 ## Build
 
