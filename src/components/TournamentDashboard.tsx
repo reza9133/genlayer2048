@@ -51,7 +51,7 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
     setLoading(true);
     setError(null);
     try {
-      const [ids, ownerAddr, defaultFeeWei] = await Promise.all([
+      const [rawIds, ownerAddr, defaultFeeWei] = await Promise.all([
         listTournamentIds(),
         getOwner(),
         getDefaultEntryFee(),
@@ -59,22 +59,37 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
       setOwner(ownerAddr);
       setDefaultEntryFeeGen(formatWeiToGen(defaultFeeWei));
 
+      // تبدیل امن تمام آی‌دی‌ها به عدد
+      const ids = (rawIds ?? [])
+        .map((id) => Number(id))
+        .filter((id) => !isNaN(id) && id > 0);
+
       const tournaments = await Promise.all(
-        (ids ?? []).map((id) => getTournament(Number(id))),
+        ids.map((id) => getTournament(id)),
       );
 
       let participants: (ParticipantStatusView | null)[] = tournaments.map(() => null);
       if (wallet.address) {
         participants = await Promise.all(
-          tournaments.map((t) => getParticipantStatus(toNumber(t.tournament_id), wallet.address!)),
+          tournaments.map((t) =>
+            getParticipantStatus(toNumber(t.tournament_id), wallet.address!),
+          ),
         );
       }
 
       const nextRows: Row[] = tournaments
-        .filter((t) => t.exists)
+        .filter(
+          (t) =>
+            t &&
+            (t.exists === true ||
+              String(t.exists) === "true" ||
+              toNumber(t.tournament_id) > 0),
+        )
         .map((t, i) => ({ tournament: t, participant: participants[i] }));
+
       setRows(sortRows(nextRows));
     } catch (err: any) {
+      console.error("[TournamentDashboard load error]", err);
       setError(err?.message ?? "Failed to load tournaments.");
     } finally {
       setLoading(false);
@@ -97,7 +112,6 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
     const address = requireAddress();
     const initialFundWei = input.initialFundGen ? parseGenToWei(input.initialFundGen) : 0n;
 
-    // Single transaction: creates tournament and sends initial fund value together
     await createTournament(
       address,
       {
