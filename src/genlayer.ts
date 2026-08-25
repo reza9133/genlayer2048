@@ -14,6 +14,7 @@ import { TransactionStatus } from "genlayer-js/types";
 import type {
   LeaderboardEntryView,
   ParticipantStatusView,
+  ReplayEvidence,
   TournamentView,
 } from "./types";
 
@@ -81,6 +82,7 @@ const read = <T>(functionName: string, args: unknown[] = []) =>
 export const getOwner = () => read<string>("get_owner");
 export const getDefaultEntryFee = () => read<string>("get_default_entry_fee");
 export const getMaxPlausibleScore = () => read<string>("get_max_plausible_score");
+export const getMaxReplayMoves = () => read<string>("get_max_replay_moves");
 export const getHighScore = (player: string) => read<string>("get_high_score", [player]);
 export const getPlayerStats = (player: string) =>
   read<LeaderboardEntryView>("get_player_stats", [player]);
@@ -121,8 +123,10 @@ async function write(
 }
 
 // --- Free play ---
-export const submitScore = (address: string, score: number) =>
-  write(address, "submit_score", [BigInt(Math.max(0, Math.floor(score)))]);
+// `evidence` carries the RNG seed and full move sequence; the contract
+// replays them and derives the score itself (see 2048.py, submit_score).
+export const submitScore = (address: string, evidence: ReplayEvidence) =>
+  write(address, "submit_score", [BigInt(evidence.seed), evidence.moves]);
 
 // --- Tournament admin (owner-only on-chain, enforced by the contract) ---
 export const createTournament = (
@@ -156,10 +160,15 @@ export const joinTournament = (address: string, tournamentId: number, entryFeeWe
 export const fundTournament = (address: string, tournamentId: number, amountWei: bigint) =>
   write(address, "fund_tournament", [tournamentId], amountWei);
 
-export const submitTournamentScore = (address: string, tournamentId: number, score: number) =>
+export const submitTournamentScore = (
+  address: string,
+  tournamentId: number,
+  evidence: ReplayEvidence,
+) =>
   write(address, "submit_tournament_score", [
     tournamentId,
-    BigInt(Math.max(0, Math.floor(score))),
+    BigInt(evidence.seed),
+    evidence.moves,
   ]);
 
 export const finalizeTournament = (address: string, tournamentId: number) =>
