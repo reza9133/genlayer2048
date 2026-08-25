@@ -1,80 +1,95 @@
-import type { Numeric } from "../types";
+/**
+ * Utility functions for numeric conversions, address formatting,
+ * Wei/GEN parsing, and human-readable countdowns across the 2048 dApp.
+ */
 
-const WEI_PER_GEN = 1_000_000_000_000_000_000n;
-
-/** Normalize a contract numeric return value (number | string | bigint) to a bigint. */
-export function toBigInt(value: Numeric | undefined | null): bigint {
-  if (value === undefined || value === null) return 0n;
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number") return BigInt(Math.trunc(value));
-  const trimmed = value.trim();
-  if (trimmed === "") return 0n;
-  try {
-    return BigInt(trimmed);
-  } catch {
-    // Fell back from a non-integer numeric string (shouldn't happen for u32/u256 fields).
-    return BigInt(Math.trunc(Number(trimmed)) || 0);
+export function toNumber(val: any): number {
+  if (val === undefined || val === null) return 0;
+  if (typeof val === "number") return val;
+  if (typeof val === "bigint") return Number(val);
+  if (typeof val === "string") {
+    const parsed = parseInt(val, 10);
+    return isNaN(parsed) ? 0 : parsed;
   }
+  if (typeof val === "object") {
+    if ("value" in val) return toNumber(val.value);
+    if ("hex" in val) return parseInt(val.hex, 16);
+  }
+  return Number(val) || 0;
 }
 
-/** Normalize a contract numeric return value to a regular JS number (safe for small fields). */
-export function toNumber(value: Numeric | undefined | null): number {
-  return Number(toBigInt(value));
+export function toBigInt(val: any): bigint {
+  if (val === undefined || val === null) return 0n;
+  if (typeof val === "bigint") return val;
+  if (typeof val === "number") return BigInt(Math.floor(val));
+  if (typeof val === "string") {
+    try {
+      const clean = val.trim();
+      return clean.length > 0 ? BigInt(clean) : 0n;
+    } catch {
+      return 0n;
+    }
+  }
+  if (typeof val === "object") {
+    if ("value" in val) return toBigInt(val.value);
+    if ("hex" in val) return BigInt(val.hex);
+  }
+  return 0n;
 }
 
-/** Convert a whole-GEN amount entered by a user (e.g. "0.05") into wei as a bigint. */
-export function parseGenToWei(amount: string): bigint {
-  const trimmed = amount.trim();
-  if (!trimmed) return 0n;
-  const [whole, frac = ""] = trimmed.split(".");
-  const paddedFrac = (frac + "0".repeat(18)).slice(0, 18);
-  const wholeBig = BigInt(whole || "0");
-  const fracBig = BigInt(paddedFrac || "0");
-  return wholeBig * WEI_PER_GEN + fracBig;
-}
-
-/** Format a wei bigint (or numeric-like value) as a human GEN amount string. */
-export function formatWeiToGen(value: Numeric | undefined | null, maxDecimals = 4): string {
-  const wei = toBigInt(value);
-  const whole = wei / WEI_PER_GEN;
-  const remainder = wei % WEI_PER_GEN;
-  if (remainder === 0n) return whole.toString();
-  const fracStr = remainder.toString().padStart(18, "0").slice(0, maxDecimals).replace(/0+$/, "");
-  return fracStr ? `${whole.toString()}.${fracStr}` : whole.toString();
-}
-
-export function shortenAddress(address: string | undefined | null, chars = 4): string {
-  if (!address) return "—";
-  if (address.length <= chars * 2 + 2) return address;
-  return `${address.slice(0, chars + 2)}…${address.slice(-chars)}`;
-}
-
-export function formatUnixSeconds(value: Numeric | undefined | null): string {
-  const seconds = toNumber(value);
-  if (!seconds) return "—";
-  return new Date(seconds * 1000).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
+export function formatWeiToGen(wei: any): string {
+  const b = toBigInt(wei);
+  const ether = Number(b) / 1e18;
+  return ether.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
   });
 }
 
-export function secondsUntil(value: Numeric | undefined | null): number {
-  const seconds = toNumber(value);
-  return seconds - Math.floor(Date.now() / 1000);
+export function parseGenToWei(genStr: string): bigint {
+  try {
+    const clean = genStr.trim();
+    if (!clean) return 0n;
+    const parts = clean.split(".");
+    const whole = BigInt(parts[0] || "0") * 10n ** 18n;
+    if (parts.length > 1) {
+      const decimals = parts[1].padEnd(18, "0").slice(0, 18);
+      return whole + BigInt(decimals);
+    }
+    return whole;
+  } catch {
+    return 0n;
+  }
 }
 
-export function formatCountdown(secondsRemaining: number): string {
-  if (secondsRemaining <= 0) return "Closed";
-  const d = Math.floor(secondsRemaining / 86400);
-  const h = Math.floor((secondsRemaining % 86400) / 3600);
-  const m = Math.floor((secondsRemaining % 3600) / 60);
-  const s = Math.floor(secondsRemaining % 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+export function formatUnixSeconds(sec: any): string {
+  const s = toNumber(sec);
+  if (s <= 0) return "—";
+  return new Date(s * 1000).toLocaleString();
 }
 
-export function datetimeLocalToUnixSeconds(datetimeLocal: string): number {
-  return Math.floor(new Date(datetimeLocal).getTime() / 1000);
+export function secondsUntil(deadlineSec: any): number {
+  const d = toNumber(deadlineSec);
+  const now = Math.floor(Date.now() / 1000);
+  return d - now;
+}
+
+export function formatCountdown(sec: number): string {
+  if (sec <= 0) return "Ended";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m < 60) return `${m}m ${s}s`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return `${h}h ${remM}m`;
+}
+
+export function shortenAddress(addr: string): string {
+  if (!addr || addr.length < 10) return addr || "";
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+export function datetimeLocalToUnixSeconds(dtLocal: string): number {
+  const ms = new Date(dtLocal).getTime();
+  return Math.floor(ms / 1000);
 }
