@@ -8,6 +8,7 @@ import {
   cancelTournament,
   createTournament,
   finalizeTournament,
+  fundTournament,
   getDefaultEntryFee,
   getOwner,
   getParticipantStatus,
@@ -18,7 +19,7 @@ import {
 } from "../genlayer";
 import type { ParticipantStatusView, ReplayEvidence, TournamentView } from "../types";
 import type { WalletState } from "../hooks/useWallet";
-import { formatWeiToGen, toBigInt, toNumber } from "../lib/format";
+import { formatWeiToGen, parseGenToWei, toBigInt, toNumber } from "../lib/format";
 
 interface Row {
   tournament: TournamentView;
@@ -30,7 +31,7 @@ function sortRows(rows: Row[]): Row[] {
     if (t.is_cancelled) return 3;
     if (t.is_finalized) return 2;
     const open = Number(t.deadline_ts) > Math.floor(Date.now() / 1000);
-    return open ? 0 : 1; // open first, then awaiting finalize, then finalized/cancelled
+    return open ? 0 : 1;
   };
   return [...rows].sort((a, b) => rank(a.tournament) - rank(b.tournament));
 }
@@ -44,10 +45,8 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTournamentId, setActiveTournamentId] = useState<number | null>(null);
   const [liveScore, setLiveScore] = useState(0);
-  // Replayable proof (seed + move sequence) backing `liveScore`. The
-  // contract replays this itself rather than trusting liveScore directly —
-  // see submit_tournament_score in 2048.py.
   const [liveEvidence, setLiveEvidence] = useState<ReplayEvidence | null>(null);
+  const [hasSubmittedCurrentRun, setHasSubmittedCurrentRun] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,7 +96,23 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
 
   const handleCreate = async (input: CreateTournamentInput) => {
     const address = requireAddress();
-    await createTournament(address, input);
+    await createTournament(address, {
+      name: input.name,
+      maxParticipants: input.maxParticipants,
+      winnerCount: input.winnerCount,
+      entryFeeWei: input.entryFeeWei,
+      deadlineUnixSeconds: input.deadlineUnixSeconds,
+    });
+
+    if (input.initialFundGen) {
+      const ids = await listTournamentIds();
+      const latestId = ids[ids.length - 1];
+      if (latestId) {
+        const fundWei = parseGenToWei(input.initialFundGen);
+        await fundTournament(address, Number(latestId), fundWei);
+      }
+    }
+
     await load();
   };
 
@@ -109,10 +124,11 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
 
   const handleSubmitScore = async (t: TournamentView) => {
     const address = requireAddress();
-    if (!liveEvidence) {
-      throw new Error("Play at least one move before submitting a score.");
+    if (!liveEvidence || hasSubmittedCurrentRun) {
+      throw new Error("Play a new run or make a new move before submitting.");
     }
     await submitTournamentScore(address, toNumber(t.tournament_id), liveEvidence);
+    setHasSubmittedCurrentRun(true);
     await load();
   };
 
@@ -181,20 +197,17 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
               isConnected={!!wallet.address && wallet.isCorrectNetwork}
               isPlaying={isPlaying}
               liveScore={isPlaying ? liveScore : 0}
+              hasSubmittedScore={isPlaying ? hasSubmittedCurrentRun : false}
               onTogglePlay={() => {
                 setActiveTournamentId(isPlaying ? null : id);
                 setLiveScore(0);
                 setLiveEvidence(null);
+                setHasSubmittedCurrentRun(false);
               }}
-              // NOTE: TournamentCard.tsx (not shown here) embeds <Game2048 />
-              // and forwards its onScoreChange prop upward. Game2048's
-              // onScoreChange now carries a 4th `evidence` argument
-              // ({ seed, moves }) — TournamentCard's own onScoreChange prop
-              // needs to accept and forward that same 4th argument so it
-              // reaches this handler unmodified.
               onScoreChange={(score, _gameOver, _reachedTarget, evidence) => {
                 setLiveScore(score);
                 setLiveEvidence(evidence);
+                setHasSubmittedCurrentRun(false);
               }}
               onJoin={() => handleJoin(tournament)}
               onSubmitScore={() => handleSubmitScore(tournament)}
