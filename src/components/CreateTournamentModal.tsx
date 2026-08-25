@@ -22,9 +22,9 @@ function defaultDeadline(): string {
   const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
   d.setSeconds(0, 0);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes(),
-  )}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
 }
 
 export default function CreateTournamentModal({
@@ -66,7 +66,8 @@ export default function CreateTournamentModal({
         winnerCount,
         entryFeeWei: parseGenToWei(entryFee),
         deadlineUnixSeconds,
-        initialFundGen: initialFund && parseFloat(initialFund) > 0 ? initialFund : undefined,
+        initialFundGen:
+          initialFund && parseFloat(initialFund) > 0 ? initialFund : undefined,
       });
       onClose();
     } catch (err: any) {
@@ -80,7 +81,9 @@ export default function CreateTournamentModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/70 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl border border-surface-border bg-surface p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-display text-lg font-bold text-ink-50">Create Tournament</h3>
+          <h3 className="font-display text-lg font-bold text-ink-50">
+            Create Tournament
+          </h3>
           <button onClick={onClose} className="text-muted hover:text-ink-50">
             <X size={18} />
           </button>
@@ -160,8 +163,16 @@ export default function CreateTournamentModal({
 
           {error && <p className="text-xs text-gold-deep">{error}</p>}
 
-          <button type="submit" disabled={submitting} className="btn-primary w-full">
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="btn-primary w-full"
+          >
+            {submitting ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Plus size={16} />
+            )}
             {submitting ? "Creating on-chain…" : "Create tournament"}
           </button>
         </form>
