@@ -106,6 +106,8 @@ export default function TournamentCard({
     </span>
   );
 
+  const canFinalize = isOwner || !!participant?.has_joined;
+
   return (
     <div className="card">
       <div className="flex items-start justify-between gap-3">
@@ -185,7 +187,7 @@ export default function TournamentCard({
           </>
         )}
 
-        {isConnected && !t.is_cancelled && isAwaitingFinalize && (
+        {isConnected && !t.is_cancelled && isAwaitingFinalize && canFinalize && (
           <ActionButton
             label="Finalize tournament"
             icon={<Flag size={14} />}
@@ -206,14 +208,17 @@ export default function TournamentCard({
             />
           )}
 
-        {isConnected && t.is_cancelled && participant?.has_joined && !participant?.has_claimed && (
-          <ActionButton
-            label="Claim refund"
-            icon={<Undo2 size={14} />}
-            pending={pending === "refund"}
-            onClick={() => run("refund", onClaimRefund)}
-          />
-        )}
+        {isConnected &&
+          t.is_cancelled &&
+          (participant?.has_joined || isOwner) &&
+          !participant?.has_claimed && (
+            <ActionButton
+              label="Claim refund"
+              icon={<Undo2 size={14} />}
+              pending={pending === "refund"}
+              onClick={() => run("refund", onClaimRefund)}
+            />
+          )}
 
         {isConnected && isOwner && !t.is_cancelled && !t.is_finalized && (
           <ActionButton
