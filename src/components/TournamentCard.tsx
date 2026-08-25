@@ -44,7 +44,7 @@ interface TournamentCardProps {
 }
 
 function evidenceSignature(evidence: ReplayEvidence | null): string | null {
-  return evidence ? `${evidence.seed}:${evidence.moves}` : null;
+  return evidence && evidence.moves ? `${evidence.seed}:${evidence.moves}` : null;
 }
 
 export default function TournamentCard({
@@ -88,7 +88,7 @@ export default function TournamentCard({
   const isOpen = !isCancelled && !isFinalized && remaining > 0;
   const isAwaitingFinalize = !isCancelled && !isFinalized && remaining <= 0;
 
-  const hasJoined = toBool(participant?.has_joined);
+  const hasJoined = toBool(participant?.has_joined) || (participant && toBool(participant.exists));
   const hasClaimed = toBool(participant?.has_claimed);
   const prizeAmount = toBigInt(participant?.prize_amount ?? 0);
   const participantCount = toNumber(t.participant_count);
@@ -103,11 +103,8 @@ export default function TournamentCard({
 
   const canSubmit =
     isPlaying &&
-    isConnected &&
-    hasJoined &&
     hasPlayedAnyMove &&
     !alreadySubmittedThisRun &&
-    isOpen &&
     pending === null;
 
   const run = async (key: ActionKey, action: () => Promise<void>) => {
