@@ -2,7 +2,20 @@
 """
 Game2048Platform - GenLayer Intelligent Contract
 ==================================================
+
 On-chain 2048 Game & Tournament Platform.
+
+Validator model
+----------------
+Scores are never accepted as a bare client-supplied number. Every submission
+carries a 32-bit RNG seed plus the exact move sequence played. Both the
+frontend (`Game2048.tsx`) and this contract run the *same* deterministic
+2048 engine and the *same* xorshift32 PRNG, seeded identically, so the
+contract can independently replay the whole game and compute the score
+itself. Because this replay is pure deterministic Python (no LLM/web
+access), GenVM's normal leader/validator consensus is what accepts or
+rejects the transaction -- validators are agreeing on a verified replay,
+not trusting a self-reported figure.
 """
 
 from genlayer import *
@@ -16,7 +29,7 @@ import datetime
 
 DEFAULT_ENTRY_FEE = u256(1_000_000_000_000_000_000)  # 1 GEN standard wei-style
 MAX_PLAUSIBLE_SCORE = u256(20_000_000)
-MAX_REPLAY_MOVES = u32(4000)
+MAX_REPLAY_MOVES = u32(4000)  # replay compute/gas bound
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +113,8 @@ _ROTATIONS = {"U": 3, "R": 2, "D": 1, "L": 0}
 
 
 class _Rng:
+    """xorshift32 PRNG - must match `xorshift32`/`SeededRng` in Game2048.tsx."""
+
     __slots__ = ("state",)
 
     def __init__(self, seed: int):
@@ -482,8 +497,17 @@ class Game2048Platform(gl.Contract):
     @gl.public.write
     def finalize_tournament(self, tournament_id: u32) -> None:
         tournament_id = u32(tournament_id)
+        caller = gl.message.sender_address
         t = self._get_tournament_or_raise(tournament_id)
         tid_str = str(int(tournament_id))
+        caller_str = str(caller)
+        join_key = f"{tid_str}_{caller_str}"
+
+        # Only participants or the creator/owner can finalize
+        is_creator = (caller == t.creator or caller == self.owner)
+        has_joined = self.tournament_joined.get(join_key, False)
+        if not is_creator and not has_joined:
+            raise gl.vm.UserError("Only participants or creator may finalize this tournament")
 
         if t.is_cancelled:
             raise gl.vm.UserError("Tournament has been cancelled")
@@ -600,15 +624,24 @@ class Game2048Platform(gl.Contract):
         if not t.is_cancelled:
             raise gl.vm.UserError("Tournament was not cancelled")
 
-        if not self.tournament_joined.get(action_key, False):
-            raise gl.vm.UserError("You did not join this tournament")
-
         if self.tournament_claimed.get(action_key, False):
             raise gl.vm.UserError("Refund already claimed")
 
-        refund_amount = t.entry_fee
-        if refund_amount == 0:
-            raise gl.vm.UserError("Nothing to refund for this tournament")
+        is_creator = (player == t.creator or player == self.owner)
+        has_joined = self.tournament_joined.get(action_key, False)
+
+        if not is_creator and not has_joined:
+            raise gl.vm.UserError("You have no funds to claim from this cancelled tournament")
+
+        # Creator recovers remaining prize pool; players recover entry fee
+        refund_amount = u256(0)
+        if is_creator and int(t.participant_count) == 0:
+            refund_amount = t.prize_pool
+        elif has_joined:
+            refund_amount = t.entry_fee
+
+        if int(refund_amount) == 0:
+            raise gl.vm.UserError("Nothing to refund for this address")
 
         self.tournament_claimed[action_key] = True
 
