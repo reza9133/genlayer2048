@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
+import type { ReplayEvidence } from "../types";
 
 type Board = number[][];
 type Direction = "up" | "down" | "left" | "right";
+type MoveCode = "U" | "D" | "L" | "R";
 
 const SIZE = 4;
+const DIRECTION_CODE: Record<Direction, MoveCode> = {
+  up: "U",
+  down: "D",
+  left: "L",
+  right: "R",
+};
 
 const TILE_STYLES: Record<number, { bg: string; text: string }> = {
   2: { bg: "#EEE4DA", text: "#5C4A3A" },
@@ -38,12 +46,49 @@ function emptyCells(board: Board): [number, number][] {
   return cells;
 }
 
-function spawnTile(board: Board): Board {
+/**
+ * Deterministic xorshift32 PRNG. Must stay byte-for-byte identical to the
+ * Python replay implementation in `2048.py` (`_Rng`) — every spawn drawn
+ * here has to be exactly reproducible on-chain from the same seed.
+ */
+function xorshift32(state: number): number {
+  let x = state >>> 0;
+  x ^= (x << 13) >>> 0;
+  x = x >>> 0;
+  x ^= x >>> 17;
+  x ^= (x << 5) >>> 0;
+  x = x >>> 0;
+  return x >>> 0;
+}
+
+class SeededRng {
+  state: number;
+  constructor(seed: number) {
+    this.state = seed >>> 0;
+    if (this.state === 0) this.state = 1;
+  }
+  next(): number {
+    this.state = xorshift32(this.state);
+    return this.state / 4294967296;
+  }
+}
+
+function randomSeed(): number {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    return crypto.getRandomValues(new Uint32Array(1))[0] >>> 0;
+  }
+  return Math.floor(Math.random() * 4294967296) >>> 0;
+}
+
+/** Spawns a tile using the seeded RNG (not Math.random) so every spawn the
+ *  player sees is exactly what the on-chain replay validator will derive. */
+function spawnTileSeeded(board: Board, rng: SeededRng): Board {
   const cells = emptyCells(board);
   if (cells.length === 0) return board;
-  const [r, c] = cells[Math.floor(Math.random() * cells.length)];
+  const idx = Math.min(Math.floor(rng.next() * cells.length), cells.length - 1);
+  const [r, c] = cells[idx];
   const next = cloneBoard(board);
-  next[r][c] = Math.random() < 0.9 ? 2 : 4;
+  next[r][c] = rng.next() < 0.9 ? 2 : 4;
   return next;
 }
 
@@ -112,8 +157,8 @@ function canMove(board: Board): boolean {
   return false;
 }
 
-function freshBoard(): Board {
-  return spawnTile(spawnTile(emptyBoard()));
+function freshBoard(rng: SeededRng): Board {
+  return spawnTileSeeded(spawnTileSeeded(emptyBoard(), rng), rng);
 }
 
 export interface Game2048Handle {
@@ -122,29 +167,50 @@ export interface Game2048Handle {
 }
 
 interface Game2048Props {
-  /** Called on every state change so a parent can read the live score (e.g. to enable "Submit Score"). */
-  onScoreChange?: (score: number, gameOver: boolean, reachedTarget: boolean) => void;
+  /**
+   * Called on every state change so a parent can read the live score and
+   * the replayable evidence (e.g. to enable "Submit Score"). `evidence`
+   * is what gets sent on-chain — the contract replays it to derive and
+   * verify the score itself instead of trusting `score` directly.
+   */
+  onScoreChange?: (
+    score: number,
+    gameOver: boolean,
+    reachedTarget: boolean,
+    evidence: ReplayEvidence,
+  ) => void;
   /** Compact styling for embedding inside a smaller panel. */
   compact?: boolean;
 }
 
 export default function Game2048({ onScoreChange, compact }: Game2048Props) {
-  const [board, setBoard] = useState<Board>(() => freshBoard());
+  const seedRef = useRef<number>(randomSeed());
+  const rngRef = useRef<SeededRng>();
+  if (!rngRef.current) rngRef.current = new SeededRng(seedRef.current);
+  const movesRef = useRef<MoveCode[]>([]);
+
+  const [board, setBoard] = useState<Board>(() => freshBoard(rngRef.current!));
   const [score, setScore] = useState(0);
   const [best, setBest] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
-  const reachedTarget = useMemo(() => board.some((row) => row.some((v) => v >= 2048)), [board]);
+  const reachedTarget = board.some((row) => row.some((v) => v >= 2048));
 
   useEffect(() => {
-    onScoreChange?.(score, gameOver, reachedTarget);
+    onScoreChange?.(score, gameOver, reachedTarget, {
+      seed: String(seedRef.current),
+      moves: movesRef.current.join(""),
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [score, gameOver, reachedTarget]);
 
   const restart = useCallback(() => {
-    setBoard(freshBoard());
+    seedRef.current = randomSeed();
+    rngRef.current = new SeededRng(seedRef.current);
+    movesRef.current = [];
+    setBoard(freshBoard(rngRef.current));
     setScore(0);
     setGameOver(false);
     setWon(false);
@@ -156,7 +222,8 @@ export default function Game2048({ onScoreChange, compact }: Game2048Props) {
       setBoard((prevBoard) => {
         const { board: moved, gained, moved: didMove } = move(prevBoard, direction);
         if (!didMove) return prevBoard;
-        const withSpawn = spawnTile(moved);
+        movesRef.current.push(DIRECTION_CODE[direction]);
+        const withSpawn = spawnTileSeeded(moved, rngRef.current!);
         setScore((s) => {
           const next = s + gained;
           setBest((b) => Math.max(b, next));
