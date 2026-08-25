@@ -19,7 +19,7 @@ import {
 } from "../genlayer";
 import type { ParticipantStatusView, ReplayEvidence, TournamentView } from "../types";
 import type { WalletState } from "../hooks/useWallet";
-import { formatWeiToGen, parseGenToWei, toBigInt, toBool, toNumber } from "../lib/format";
+import { formatWeiToGen, toBigInt, toBool, toNumber } from "../lib/format";
 
 interface Row {
   tournament: TournamentView;
@@ -128,7 +128,6 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
 
   const handleCreate = async (input: CreateTournamentInput) => {
     const address = requireAddress();
-    const initialFundWei = input.initialFundWei ?? (input.initialFundGen ? parseGenToWei(input.initialFundGen) : 0n);
 
     await createTournament(
       address,
@@ -138,7 +137,7 @@ export default function TournamentDashboard({ wallet }: { wallet: WalletState })
         winnerCount: input.winnerCount,
         entryFeeWei: input.entryFeeWei,
         deadlineUnixSeconds: input.deadlineUnixSeconds,
-        initialFundWei,
+        initialFundWei: input.initialFundWei,
       },
     );
 
