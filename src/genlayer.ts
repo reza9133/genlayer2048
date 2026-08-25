@@ -1,13 +1,3 @@
-/**
- * GenLayer client setup and a typed wrapper around every method exposed by
- * the deployed Game2048Platform Intelligent Contract.
- *
- * Two clients are used, following GenLayer's recommended browser-dApp
- * pattern (see docs.genlayer.com/api-references/genlayer-js):
- *   - `readClient` talks directly to the GenLayer RPC and needs no wallet.
- *   - a per-address `writeClient` is created lazily once MetaMask is
- *     connected, and signs transactions through the injected provider.
- */
 import { createClient } from "genlayer-js";
 import { testnetBradbury } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
@@ -24,16 +14,11 @@ export const CONTRACT_ADDRESS = (import.meta.env.VITE_CONTRACT_ADDRESS ||
 export const CHAIN = testnetBradbury;
 export const NETWORK_NAME = "testnetBradbury" as const;
 
-// ---------------------------------------------------------------------------
-// Client management
-// ---------------------------------------------------------------------------
-
 export const readClient = createClient({ chain: CHAIN });
 
 let cachedWriteAddress: string | null = null;
 let cachedWriteClient: ReturnType<typeof createClient> | null = null;
 
-/** Returns a write-capable client bound to `address`, reusing it across calls. */
 export function getWriteClient(address: string) {
   if (!cachedWriteClient || cachedWriteAddress !== address) {
     cachedWriteClient = createClient({
@@ -46,15 +31,11 @@ export function getWriteClient(address: string) {
   return cachedWriteClient;
 }
 
-/** Makes sure the connected wallet is switched to GenLayer Testnet Bradbury before writing. */
 export async function ensureBradburyNetwork(address: string) {
   const client = getWriteClient(address);
   try {
     await client.connect(NETWORK_NAME);
   } catch (err) {
-    // Non-fatal: the wallet may already be on the right chain, or the user
-    // dismissed the network-switch prompt — writeContract will surface a
-    // clearer error below if the chain is genuinely wrong.
     console.warn("[genlayer] network switch skipped:", err);
   }
   return client;
@@ -68,10 +49,6 @@ async function waitForAccepted(hash: `0x${string}`) {
     retries: 60,
   });
 }
-
-// ---------------------------------------------------------------------------
-// Reads (no wallet required)
-// ---------------------------------------------------------------------------
 
 const read = <T>(functionName: string, args: unknown[] = []) =>
   readClient.readContract({
@@ -103,11 +80,6 @@ export const getTournamentWinners = (tournamentId: number) =>
 export const getParticipantStatus = (tournamentId: number, player: string) =>
   read<ParticipantStatusView>("get_participant_status", [tournamentId, player]);
 
-// ---------------------------------------------------------------------------
-// Writes (wallet required — every call switches network, sends the tx, then
-// waits for it to reach ACCEPTED before resolving)
-// ---------------------------------------------------------------------------
-
 async function write(
   address: string,
   functionName: string,
@@ -124,13 +96,9 @@ async function write(
   return waitForAccepted(hash);
 }
 
-// --- Free play ---
-// `evidence` carries the RNG seed and full move sequence; the contract
-// replays them and derives the score itself (see 2048.py, submit_score).
 export const submitScore = (address: string, evidence: ReplayEvidence) =>
   write(address, "submit_score", [BigInt(evidence.seed), evidence.moves]);
 
-// --- Tournament admin (owner-only on-chain, enforced by the contract) ---
 export const createTournament = (
   address: string,
   params: {
@@ -161,7 +129,6 @@ export const cancelTournament = (address: string, tournamentId: number) =>
 export const transferOwnership = (address: string, newOwner: string) =>
   write(address, "transfer_ownership", [newOwner]);
 
-// --- Tournament participation ---
 export const joinTournament = (address: string, tournamentId: number, entryFeeWei: bigint) =>
   write(address, "join_tournament", [tournamentId], entryFeeWei);
 
