@@ -64,8 +64,8 @@ async function waitForAccepted(hash: `0x${string}`) {
   return readClient.waitForTransactionReceipt({
     hash: hash as any,
     status: TransactionStatus.ACCEPTED,
-    interval: 3000, 
-    retries: 60,    
+    interval: 3000,
+    retries: 60,
   });
 }
 
@@ -140,14 +140,20 @@ export const createTournament = (
     entryFeeWei: bigint;
     deadlineUnixSeconds: number;
   },
+  initialFundWei: bigint = 0n,
 ) =>
-  write(address, "create_tournament", [
-    params.name,
-    Math.floor(params.maxParticipants),
-    Math.floor(params.winnerCount),
-    params.entryFeeWei,
-    BigInt(Math.floor(params.deadlineUnixSeconds)),
-  ]);
+  write(
+    address,
+    "create_tournament",
+    [
+      params.name,
+      Math.floor(params.maxParticipants),
+      Math.floor(params.winnerCount),
+      params.entryFeeWei,
+      BigInt(Math.floor(params.deadlineUnixSeconds)),
+    ],
+    initialFundWei,
+  );
 
 export const cancelTournament = (address: string, tournamentId: number) =>
   write(address, "cancel_tournament", [tournamentId]);
