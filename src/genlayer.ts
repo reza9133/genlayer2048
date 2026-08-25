@@ -64,6 +64,8 @@ async function waitForAccepted(hash: `0x${string}`) {
   return readClient.waitForTransactionReceipt({
     hash: hash as any,
     status: TransactionStatus.ACCEPTED,
+    interval: 3000, 
+    retries: 60,    
   });
 }
 
