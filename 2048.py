@@ -2,28 +2,7 @@
 """
 Game2048Platform - GenLayer Intelligent Contract
 ==================================================
-
 On-chain 2048 Game & Tournament Platform.
-
-Validator model
-----------------
-Scores are never accepted as a bare client-supplied number. Every submission
-carries a 32-bit RNG seed plus the exact move sequence played. Both the
-frontend (`Game2048.tsx`) and this contract run the *same* deterministic
-2048 engine and the *same* xorshift32 PRNG, seeded identically, so the
-contract can independently replay the whole game and compute the score
-itself. Because this replay is pure deterministic Python (no LLM/web
-access), GenVM's normal leader/validator consensus is what accepts or
-rejects the transaction -- validators are agreeing on a verified replay,
-not trusting a self-reported figure.
-
-Known limitation: a player can simulate many seeds off-chain before ever
-touching the chain, and only submit the run that came out best. Closing
-that fully needs a commit-reveal or per-move entropy scheme (a chain
-round-trip per tile), which is a bigger UX change than this pass covers.
-This validator's job is narrower and still real: it guarantees any
-*accepted* score is the mathematically correct result of legal 2048 moves
-applied to a legal spawn sequence, not an arbitrary number.
 """
 
 from genlayer import *
@@ -37,20 +16,7 @@ import datetime
 
 DEFAULT_ENTRY_FEE = u256(1_000_000_000_000_000_000)  # 1 GEN standard wei-style
 MAX_PLAUSIBLE_SCORE = u256(20_000_000)
-MAX_REPLAY_MOVES = u32(4000)  # replay compute/gas bound
-
-
-# ---------------------------------------------------------------------------
-# EVM Account interface for external transfers (EOA / MetaMask)
-# ---------------------------------------------------------------------------
-
-@gl.evm.contract_interface
-class _Recipient:
-    class View:
-        pass
-
-    class Write:
-        pass
+MAX_REPLAY_MOVES = u32(4000)
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +51,7 @@ class Tournament:
 
 
 # ---------------------------------------------------------------------------
-# Plain (non-storage) view-return dataclasses
+# Plain view-return dataclasses
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -126,12 +92,6 @@ class ParticipantStatusView:
 
 # ---------------------------------------------------------------------------
 # Deterministic 2048 replay engine
-#
-# Every function below is pure (no `self`, no storage access) and MUST stay
-# byte-for-byte in sync with the mirrored logic in `Game2048.tsx`
-# (`xorshift32`, `SeededRng`, `spawnTileSeeded`, `move`). If either side
-# changes the collapse/rotate/RNG algorithm, replay validation will start
-# rejecting every legitimate game.
 # ---------------------------------------------------------------------------
 
 _SIZE = 4
@@ -140,8 +100,6 @@ _ROTATIONS = {"U": 3, "R": 2, "D": 1, "L": 0}
 
 
 class _Rng:
-    """xorshift32 PRNG - must match `xorshift32`/`SeededRng` in Game2048.tsx."""
-
     __slots__ = ("state",)
 
     def __init__(self, seed: int):
@@ -232,13 +190,6 @@ def _move_board(board, direction: str):
 
 
 def _replay_moves(seed: int, moves: str):
-    """Replays (seed, moves) through the 2048 engine.
-
-    Returns (final_score, is_valid). is_valid is False if the evidence is
-    malformed, contains an illegal/no-op move, or produces an implausible
-    score -- any of which means the submission is rejected outright rather
-    than silently corrected.
-    """
     if len(moves) > int(MAX_REPLAY_MOVES):
         return 0, False
 
@@ -255,8 +206,6 @@ def _replay_moves(seed: int, moves: str):
             return 0, False
         new_board, gained, moved = _move_board(board, ch)
         if not moved:
-            # A recorded move that doesn't change the board can't come from
-            # a genuine playthrough -- the UI only records moves that did.
             return 0, False
         board = new_board
         total_score += gained
@@ -299,10 +248,6 @@ class Game2048Platform(gl.Contract):
             raise gl.vm.UserError("Only the contract owner may perform this action")
 
     def _now_ts(self) -> u256:
-        # GenVM exposes a deterministic transaction time: every validator
-        # replaying this transaction computes the same value, which is what
-        # makes on-chain deadline enforcement possible at all (the previous
-        # implementation returned a hardcoded 0 and enforced nothing).
         return u256(int(datetime.datetime.now().timestamp()))
 
     def _get_tournament_or_raise(self, tournament_id: u32) -> Tournament:
@@ -345,7 +290,7 @@ class Game2048Platform(gl.Contract):
                 last_submitted_at=now_ts,
             )
 
-    @gl.public.write
+    @gl.public.write.payable
     def create_tournament(
         self,
         name: str,
@@ -360,6 +305,7 @@ class Game2048Platform(gl.Contract):
         winner_count = u32(winner_count)
         entry_fee = u256(entry_fee)
         deadline_timestamp = u256(deadline_timestamp)
+        initial_pool = u256(gl.message.value)
 
         if len(name) == 0:
             raise gl.vm.UserError("Tournament name cannot be empty")
@@ -384,7 +330,7 @@ class Game2048Platform(gl.Contract):
             max_participants=max_participants,
             winner_count=winner_count,
             entry_fee=entry_fee,
-            prize_pool=u256(0),
+            prize_pool=initial_pool,
             deadline_ts=deadline_timestamp,
             created_at_ts=now_ts,
             participant_count=u32(0),
@@ -447,11 +393,9 @@ class Game2048Platform(gl.Contract):
         if self.tournament_joined.get(join_key, False):
             raise gl.vm.UserError("Player has already joined this tournament")
 
-        # Strict fee validation restored
         if paid != t.entry_fee:
             raise gl.vm.UserError("Incorrect entry fee amount sent")
 
-        # --- Effects ---
         self.tournament_joined[join_key] = True
 
         idx = int(t.participant_count)
@@ -622,7 +566,6 @@ class Game2048Platform(gl.Contract):
         if amount == 0:
             raise gl.vm.UserError("No prize available for this address")
 
-        # --- Effects before interaction ---
         self.tournament_claimed[action_key] = True
         self.tournament_prize_amounts[action_key] = u256(0)
 
@@ -641,8 +584,8 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        # --- Interaction: actually move the funds to EOA / MetaMask ---
-        _Recipient(Address(player)).emit_transfer(value=amount)
+        recipient = gl.get_contract_at(player)
+        recipient.emit_transfer(value=amount)
 
     @gl.public.write
     def claim_refund(self, tournament_id: u32) -> None:
@@ -667,7 +610,6 @@ class Game2048Platform(gl.Contract):
         if refund_amount == 0:
             raise gl.vm.UserError("Nothing to refund for this tournament")
 
-        # --- Effects before interaction ---
         self.tournament_claimed[action_key] = True
 
         self.tournaments[tournament_id] = Tournament(
@@ -685,8 +627,8 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        # --- Interaction: actually move the funds to EOA / MetaMask ---
-        _Recipient(Address(player)).emit_transfer(value=refund_amount)
+        recipient = gl.get_contract_at(player)
+        recipient.emit_transfer(value=refund_amount)
 
     @gl.public.write
     def transfer_ownership(self, new_owner: Address) -> None:
@@ -795,7 +737,7 @@ class Game2048Platform(gl.Contract):
     @gl.public.view
     def get_tournament_count(self) -> u32:
         try:
-            return u32(int(self.next_tournament_id) - 1)
+            return u32(len(self.tournament_ids))
         except Exception:
             return u32(0)
 
