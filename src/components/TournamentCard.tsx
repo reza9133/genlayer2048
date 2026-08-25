@@ -33,6 +33,7 @@ interface TournamentCardProps {
   isConnected: boolean;
   isPlaying: boolean;
   liveScore: number;
+  hasSubmittedScore?: boolean;
   onTogglePlay: () => void;
   onScoreChange: (
     score: number,
@@ -55,6 +56,7 @@ export default function TournamentCard({
   isConnected,
   isPlaying,
   liveScore,
+  hasSubmittedScore = false,
   onTogglePlay,
   onScoreChange,
   onJoin,
@@ -173,10 +175,10 @@ export default function TournamentCard({
             />
             {isPlaying && (
               <ActionButton
-                label={`Submit score (${liveScore})`}
+                label={hasSubmittedScore ? "Score Submitted ✓" : `Submit score (${liveScore})`}
                 icon={<Send size={14} />}
                 pending={pending === "submit"}
-                disabled={liveScore <= 0}
+                disabled={liveScore <= 0 || hasSubmittedScore}
                 onClick={() => run("submit", onSubmitScore)}
               />
             )}
