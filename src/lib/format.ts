@@ -8,7 +8,12 @@ export function toNumber(val: any): number {
   if (typeof val === "number") return val;
   if (typeof val === "bigint") return Number(val);
   if (typeof val === "string") {
-    const parsed = parseInt(val, 10);
+    const clean = val.trim();
+    if (clean.startsWith("0x") || clean.startsWith("0X")) {
+      const parsedHex = parseInt(clean, 16);
+      return isNaN(parsedHex) ? 0 : parsedHex;
+    }
+    const parsed = parseInt(clean, 10);
     return isNaN(parsed) ? 0 : parsed;
   }
   if (typeof val === "object") {
@@ -25,7 +30,11 @@ export function toBigInt(val: any): bigint {
   if (typeof val === "string") {
     try {
       const clean = val.trim();
-      return clean.length > 0 ? BigInt(clean) : 0n;
+      if (!clean) return 0n;
+      if (clean.startsWith("0x") || clean.startsWith("0X")) {
+        return BigInt(clean);
+      }
+      return BigInt(clean);
     } catch {
       return 0n;
     }
