@@ -81,6 +81,7 @@ export default function TournamentCard({
   const participantCount = toNumber(t.participant_count);
   const maxParticipants = toNumber(t.max_participants);
   const isFull = participantCount >= maxParticipants;
+  const prizePool = toNumber(t.prize_pool);
 
   const run = async (key: ActionKey, action: () => Promise<void>) => {
     setPending(key);
@@ -106,7 +107,10 @@ export default function TournamentCard({
     </span>
   );
 
-  const canFinalize = isOwner || !!participant?.has_joined;
+  const canFinalize = (isOwner || !!participant?.has_joined) && participantCount > 0;
+  
+  // سازنده اگر استخر شارژ داشته باشد و هیچ بازیکنی نیامده باشد، می‌تواند ریفاند بزند
+  const canOwnerRefundEmpty = isOwner && isAwaitingFinalize && participantCount === 0 && prizePool > 0;
 
   return (
     <div className="card">
@@ -193,6 +197,16 @@ export default function TournamentCard({
             icon={<Flag size={14} />}
             pending={pending === "finalize"}
             onClick={() => run("finalize", onFinalize)}
+          />
+        )}
+
+        {/* دکمه استرداد وجه شارژ اولیه به سازنده در صورت نبود شرکت‌کننده */}
+        {isConnected && canOwnerRefundEmpty && (
+          <ActionButton
+            label="Refund empty pool"
+            icon={<Undo2 size={14} />}
+            pending={pending === "refund"}
+            onClick={() => run("refund", onClaimRefund)}
           />
         )}
 
