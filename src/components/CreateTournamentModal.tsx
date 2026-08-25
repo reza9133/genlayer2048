@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Loader2, Plus, X } from "lucide-react";
-import { datetimeLocalToUnixSeconds, parseGenToWei } from "../lib/format";
+import { X } from "lucide-react";
+import { parseGenToWei } from "../lib/format";
 
 export interface CreateTournamentInput {
   name: string;
@@ -8,7 +8,7 @@ export interface CreateTournamentInput {
   winnerCount: number;
   entryFeeWei: bigint;
   deadlineUnixSeconds: number;
-  initialFundGen?: string;
+  initialFundWei?: bigint;
 }
 
 interface CreateTournamentModalProps {
@@ -18,13 +18,11 @@ interface CreateTournamentModalProps {
   defaultEntryFeeGen: string;
 }
 
-function defaultDeadline(): string {
-  const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+function defaultDeadlineLocal(): string {
+  const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
   d.setSeconds(0, 0);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export default function CreateTournamentModal({
@@ -33,42 +31,91 @@ export default function CreateTournamentModal({
   onCreate,
   defaultEntryFeeGen,
 }: CreateTournamentModalProps) {
-  const [name, setName] = useState("Weekend 2048 Cup");
-  const [maxParticipants, setMaxParticipants] = useState(20);
-  const [winnerCount, setWinnerCount] = useState(3);
-  const [entryFee, setEntryFee] = useState(defaultEntryFeeGen);
-  const [initialFund, setInitialFund] = useState("0");
-  const [deadline, setDeadline] = useState(defaultDeadline());
+  const [name, setName] = useState("");
+  const [maxParticipants, setMaxParticipants] = useState("16");
+  const [winnerCount, setWinnerCount] = useState("3");
+  const [entryFeeGen, setEntryFeeGen] = useState(defaultEntryFeeGen);
+  const [initialFundGen, setInitialFundGen] = useState("");
+  const [deadlineLocal, setDeadlineLocal] = useState(defaultDeadlineLocal());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
 
+  const reset = () => {
+    setName("");
+    setMaxParticipants("16");
+    setWinnerCount("3");
+    setEntryFeeGen(defaultEntryFeeGen);
+    setInitialFundGen("");
+    setDeadlineLocal(defaultDeadlineLocal());
+    setError(null);
+  };
+
+  const handleClose = () => {
+    if (submitting) return;
+    reset();
+    onClose();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const deadlineUnixSeconds = datetimeLocalToUnixSeconds(deadline);
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      setError("Tournament name is required.");
+      return;
+    }
+
+    const maxParticipantsNum = Number.parseInt(maxParticipants, 10);
+    if (!Number.isFinite(maxParticipantsNum) || maxParticipantsNum <= 0) {
+      setError("Max participants must be a positive whole number.");
+      return;
+    }
+
+    const winnerCountNum = Number.parseInt(winnerCount, 10);
+    if (!Number.isFinite(winnerCountNum) || winnerCountNum <= 0) {
+      setError("Winner count must be a positive whole number.");
+      return;
+    }
+    if (winnerCountNum > maxParticipantsNum) {
+      setError("Winner count can't exceed max participants.");
+      return;
+    }
+
+    const deadlineMs = new Date(deadlineLocal).getTime();
+    if (!Number.isFinite(deadlineMs)) {
+      setError("Please choose a valid deadline.");
+      return;
+    }
+    const deadlineUnixSeconds = Math.floor(deadlineMs / 1000);
     if (deadlineUnixSeconds <= Math.floor(Date.now() / 1000)) {
       setError("Deadline must be in the future.");
       return;
     }
-    if (winnerCount > maxParticipants) {
-      setError("Winner count cannot exceed max participants.");
+
+    let entryFeeWei: bigint;
+    let initialFundWei: bigint | undefined;
+    try {
+      entryFeeWei = parseGenToWei(entryFeeGen || "0");
+      initialFundWei = initialFundGen.trim() === "" ? undefined : parseGenToWei(initialFundGen);
+    } catch (err: any) {
+      setError(err?.message ?? "Invalid GEN amount.");
       return;
     }
 
     setSubmitting(true);
     try {
       await onCreate({
-        name,
-        maxParticipants,
-        winnerCount,
-        entryFeeWei: parseGenToWei(entryFee),
+        name: trimmedName,
+        maxParticipants: maxParticipantsNum,
+        winnerCount: winnerCountNum,
+        entryFeeWei,
         deadlineUnixSeconds,
-        initialFundGen:
-          initialFund && parseFloat(initialFund) > 0 ? initialFund : undefined,
+        initialFundWei,
       });
+      reset();
       onClose();
     } catch (err: any) {
       setError(err?.message ?? "Failed to create tournament.");
@@ -78,103 +125,103 @@ export default function CreateTournamentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/70 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-surface-border bg-surface p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="card w-full max-w-md">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-display text-lg font-bold text-ink-50">
-            Create Tournament
-          </h3>
-          <button onClick={onClose} className="text-muted hover:text-ink-50">
-            <X size={18} />
+          <h3 className="font-display text-lg font-bold text-ink-50">Create tournament</h3>
+          <button onClick={handleClose} className="btn-ghost !p-1.5" aria-label="Close">
+            <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="label">Name</label>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            Name
             <input
-              className="input"
+              type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              maxLength={64}
+              placeholder="Friday Night 2048"
+              className="input"
+              maxLength={80}
               required
             />
-          </div>
+          </label>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Max participants</label>
+            <label className="flex flex-col gap-1 text-sm text-muted">
+              Max participants
               <input
                 type="number"
                 min={1}
-                className="input"
+                step={1}
                 value={maxParticipants}
-                onChange={(e) => setMaxParticipants(Number(e.target.value))}
+                onChange={(e) => setMaxParticipants(e.target.value)}
+                className="input"
                 required
               />
-            </div>
-            <div>
-              <label className="label">Winners</label>
+            </label>
+            <label className="flex flex-col gap-1 text-sm text-muted">
+              Winners
               <input
                 type="number"
                 min={1}
-                className="input"
+                step={1}
                 value={winnerCount}
-                onChange={(e) => setWinnerCount(Number(e.target.value))}
+                onChange={(e) => setWinnerCount(e.target.value)}
+                className="input"
                 required
               />
-            </div>
+            </label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Entry fee (GEN)</label>
+            <label className="flex flex-col gap-1 text-sm text-muted">
+              Entry fee (GEN)
               <input
-                className="input"
-                value={entryFee}
-                onChange={(e) => setEntryFee(e.target.value)}
-                placeholder="0.05"
+                type="text"
                 inputMode="decimal"
+                value={entryFeeGen}
+                onChange={(e) => setEntryFeeGen(e.target.value)}
+                placeholder="0.05"
+                className="input"
                 required
               />
-            </div>
-            <div>
-              <label className="label">Initial pool (GEN)</label>
+            </label>
+            <label className="flex flex-col gap-1 text-sm text-muted">
+              Initial prize pool (GEN)
               <input
-                className="input"
-                value={initialFund}
-                onChange={(e) => setInitialFund(e.target.value)}
-                placeholder="0 (Optional)"
+                type="text"
                 inputMode="decimal"
+                value={initialFundGen}
+                onChange={(e) => setInitialFundGen(e.target.value)}
+                placeholder="Optional"
+                className="input"
               />
-            </div>
+            </label>
           </div>
 
-          <div>
-            <label className="label">Deadline</label>
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            Deadline
             <input
               type="datetime-local"
+              value={deadlineLocal}
+              onChange={(e) => setDeadlineLocal(e.target.value)}
               className="input"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
               required
             />
-          </div>
+          </label>
 
           {error && <p className="text-xs text-gold-deep">{error}</p>}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="btn-primary w-full"
-          >
-            {submitting ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Plus size={16} />
-            )}
-            {submitting ? "Creating on-chain…" : "Create tournament"}
-          </button>
+          <div className="mt-2 flex justify-end gap-2">
+            <button type="button" onClick={handleClose} className="btn-ghost text-sm" disabled={submitting}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-chain text-sm" disabled={submitting}>
+              {submitting ? "Creating..." : "Create tournament"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
