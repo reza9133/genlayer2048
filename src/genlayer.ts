@@ -47,8 +47,8 @@ function sleep(ms: number) {
 
 async function waitForStatus(
   hash: `0x${string}`,
-  status: TransactionStatus,
-  { retries = 5, retryDelayMs = 4000 }: { retries?: number; retryDelayMs?: number } = {},
+  status: TransactionStatus = TransactionStatus.ACCEPTED,
+  { retries = 20, retryDelayMs = 2000 }: { retries?: number; retryDelayMs?: number } = {},
 ) {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -56,11 +56,13 @@ async function waitForStatus(
       return await readClient.waitForTransactionReceipt({
         hash: hash as any,
         status,
+        interval: 2000,
+        retries: 60,
       });
     } catch (err) {
       lastError = err;
       if (attempt < retries) {
-        await sleep(retryDelayMs * (attempt + 1));
+        await sleep(retryDelayMs);
       }
     }
   }
@@ -139,7 +141,6 @@ export const createTournament = (
       BigInt(Math.floor(params.deadlineUnixSeconds)),
     ],
     params.initialFundWei ?? 0n,
-    TransactionStatus.FINALIZED,
   );
 
 export const cancelTournament = (address: string, tournamentId: number) =>
@@ -149,10 +150,10 @@ export const transferOwnership = (address: string, newOwner: string) =>
   write(address, "transfer_ownership", [newOwner]);
 
 export const joinTournament = (address: string, tournamentId: number, entryFeeWei: bigint) =>
-  write(address, "join_tournament", [tournamentId], entryFeeWei, TransactionStatus.FINALIZED);
+  write(address, "join_tournament", [tournamentId], entryFeeWei);
 
 export const fundTournament = (address: string, tournamentId: number, amountWei: bigint) =>
-  write(address, "fund_tournament", [tournamentId], amountWei, TransactionStatus.FINALIZED);
+  write(address, "fund_tournament", [tournamentId], amountWei);
 
 export const submitTournamentScore = (
   address: string,
@@ -169,7 +170,7 @@ export const finalizeTournament = (address: string, tournamentId: number) =>
   write(address, "finalize_tournament", [tournamentId]);
 
 export const claimPrize = (address: string, tournamentId: number) =>
-  write(address, "claim_prize", [tournamentId], 0n, TransactionStatus.FINALIZED);
+  write(address, "claim_prize", [tournamentId]);
 
 export const claimRefund = (address: string, tournamentId: number) =>
-  write(address, "claim_refund", [tournamentId], 0n, TransactionStatus.FINALIZED);
+  write(address, "claim_refund", [tournamentId]);
