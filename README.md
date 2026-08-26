@@ -55,9 +55,60 @@ src/
 │   ├── TournamentCard.tsx      # tournament card with embedded gameplay & actions
 │   └── CreateTournamentModal.tsx # tournament creation modal (owner only)
 └── App.tsx
-Run LocallyRequires Node.js 18+.Bashnpm install
+
+```
+
+---
+
+## Run Locally
+
+Requires Node.js 18+.
+
+```bash
+npm install
 cp .env.example .env
 npm run dev
-Open http://localhost:5173 and connect your wallet. Make sure you are connected to the GenLayer Bradbury Testnet. Testnet GEN can be obtained from the GenLayer Testnet Faucet.Environment VariablesVariableDefaultDescriptionVITE_CONTRACT_ADDRESS0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6cDeployed contract addressBuild & DeployBashnpm run build   # type checks and builds to dist/
+
+```
+
+Open `http://localhost:5173` and connect your wallet. Make sure you are connected to the GenLayer Bradbury Testnet. Testnet GEN can be obtained from the [GenLayer Testnet Faucet](https://testnet-faucet.genlayer.foundation).
+
+### Environment Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VITE_CONTRACT_ADDRESS` | `0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c` | Deployed contract address |
+
+---
+
+## Build & Deploy
+
+```bash
+npm run build   # type checks and builds to dist/
 npm run preview # serves the production build locally
-Deploy to Cloudflare PagesPush the repository to GitHub.In Cloudflare Dashboard: Workers & Pages → Create → Pages → Connect to Git.Build Configuration:Framework preset: ViteBuild command: npm run buildBuild output directory: distSet the environment variable VITE_CONTRACT_ADDRESS to 0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c.Deploy.Contract Permissions & LifecycleFinalization: finalize_tournament is callable by anyone once the deadline has passed, ensuring tournaments can be resolved without dependency on the creator.Admin Control: Tournament creation and cancellation are restricted to the contract owner.
+
+```
+
+### Deploy to Cloudflare Pages
+
+1. Push the repository to GitHub.
+2. In Cloudflare Dashboard: **Workers & Pages → Create → Pages → Connect to Git**.
+3. Build Configuration:
+* **Framework preset:** Vite
+* **Build command:** `npm run build`
+* **Build output directory:** `dist`
+
+
+4. Set the environment variable `VITE_CONTRACT_ADDRESS` to `0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c`.
+5. Deploy.
+
+---
+
+## Contract Permissions & Lifecycle
+
+* **Finalization:** `finalize_tournament` is callable by anyone once the deadline has passed, ensuring tournaments can be resolved without dependency on the creator.
+* **Admin Control:** Tournament creation and cancellation are restricted to the contract `owner`.
+
+```
+
+```
