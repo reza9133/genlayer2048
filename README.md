@@ -23,7 +23,7 @@ Scores are **never accepted as bare client-supplied numbers**. The contract impl
    - Finalization cannot be triggered before the deadline expires.
 
 3. **Native Fund Transfers:**
-   - Prize claims (`claim_prize`) and cancelled tournament refunds (`claim_refund`) execute native GEN transfers via `gl.get_contract_at(player).emit_transfer(value=amount)`.
+   - Prize claims (`claim_prize`) and refunds (`claim_refund`) execute native GEN transfers directly to the player's external address via EVM interface `_Recipient(player).emit_transfer(value=amount)`.
 
 ---
 
@@ -38,77 +38,26 @@ Scores are **never accepted as bare client-supplied numbers**. The contract impl
 
 ## Project Structure
 
-
-```
-
+```text
 src/
-genlayer.ts                 # client setup + typed wrappers for contract methods
-types.ts                    # TypeScript types & ReplayEvidence interfaces
-lib/format.ts               # wei↔GEN conversion, address & date helpers
-hooks/useWallet.ts          # MetaMask connect + Bradbury network switch
-components/
-Game2048.tsx              # playable 2048 grid with xorshift32 PRNG & move logger
-WalletButton.tsx
-FreePlay.tsx              # free play mode with evidence submission
-Leaderboard.tsx           # global verified high score leaderboard
-TournamentDashboard.tsx   # tournament listings & management
-TournamentCard.tsx        # tournament card with embedded gameplay & actions
-CreateTournamentModal.tsx # tournament creation modal (owner only)
-App.tsx
-
-```
-
----
-
-## Run Locally
-
-Requires Node.js 18+.
-
-```bash
-npm install
+├── genlayer.ts                 # client setup + typed wrappers for contract methods
+├── types.ts                    # TypeScript types & ReplayEvidence interfaces
+├── lib/
+│   └── format.ts               # wei↔GEN conversion, address & date helpers
+├── hooks/
+│   └── useWallet.ts            # MetaMask connect + Bradbury network switch
+├── components/
+│   ├── Game2048.tsx            # playable 2048 grid with xorshift32 PRNG & move logger
+│   ├── WalletButton.tsx
+│   ├── FreePlay.tsx            # free play mode with evidence submission
+│   ├── Leaderboard.tsx         # global verified high score leaderboard
+│   ├── TournamentDashboard.tsx # tournament listings & management
+│   ├── TournamentCard.tsx      # tournament card with embedded gameplay & actions
+│   └── CreateTournamentModal.tsx # tournament creation modal (owner only)
+└── App.tsx
+Run LocallyRequires Node.js 18+.Bashnpm install
 cp .env.example .env
 npm run dev
-
-```
-
-Open `http://localhost:5173` and connect your wallet. Make sure you are connected to the GenLayer Bradbury Testnet. Testnet GEN can be obtained from the [GenLayer Testnet Faucet](https://testnet-faucet.genlayer.foundation).
-
-### Environment Variables
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `VITE_CONTRACT_ADDRESS` | `0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c` | Deployed contract address |
-
----
-
-## Build & Deploy
-
-```bash
-npm run build   # type checks and builds to dist/
+Open http://localhost:5173 and connect your wallet. Make sure you are connected to the GenLayer Bradbury Testnet. Testnet GEN can be obtained from the GenLayer Testnet Faucet.Environment VariablesVariableDefaultDescriptionVITE_CONTRACT_ADDRESS0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6cDeployed contract addressBuild & DeployBashnpm run build   # type checks and builds to dist/
 npm run preview # serves the production build locally
-
-```
-
-### Deploy to Cloudflare Pages
-
-1. Push the repository to GitHub.
-2. In Cloudflare Dashboard: **Workers & Pages → Create → Pages → Connect to Git**.
-3. Build Configuration:
-* **Framework preset:** Vite
-* **Build command:** `npm run build`
-* **Build output directory:** `dist`
-
-
-4. Set the environment variable `VITE_CONTRACT_ADDRESS` to `0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c`.
-5. Deploy.
-
----
-
-## Contract Permissions & Lifecycle
-
-* **Finalization:** `finalize_tournament` is callable by anyone once the deadline has passed, ensuring tournaments can be resolved without dependency on the creator.
-* **Admin Control:** Tournament creation and cancellation are restricted to the contract `owner`.
-
-```
-
-```
+Deploy to Cloudflare PagesPush the repository to GitHub.In Cloudflare Dashboard: Workers & Pages → Create → Pages → Connect to Git.Build Configuration:Framework preset: ViteBuild command: npm run buildBuild output directory: distSet the environment variable VITE_CONTRACT_ADDRESS to 0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c.Deploy.Contract Permissions & LifecycleFinalization: finalize_tournament is callable by anyone once the deadline has passed, ensuring tournaments can be resolved without dependency on the creator.Admin Control: Tournament creation and cancellation are restricted to the contract owner.
