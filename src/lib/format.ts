@@ -118,8 +118,3 @@ export function shortenAddress(addr: string): string {
   if (!addr || addr.length < 10) return addr || "";
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
-
-export function datetimeLocalToUnixSeconds(dtLocal: string): number {
-  const ms = new Date(dtLocal).getTime();
-  return Math.floor(ms / 1000);
-}
