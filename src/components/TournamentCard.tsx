@@ -88,7 +88,6 @@ export default function TournamentCard({
   const isOpen = !isCancelled && !isFinalized && remaining > 0;
   const isAwaitingFinalize = !isCancelled && !isFinalized && remaining <= 0;
 
-  // has_joined
   const hasJoined = toBool(participant?.has_joined);
   const hasSubmitted = toBool(participant?.has_submitted);
   const hasClaimed = toBool(participant?.has_claimed);
@@ -96,7 +95,7 @@ export default function TournamentCard({
   const participantCount = toNumber(t.participant_count);
   const maxParticipants = toNumber(t.max_participants);
   const isFull = participantCount >= maxParticipants;
-  const prizePool = toNumber(t.prize_pool);
+  const prizePool = toBigInt(t.prize_pool);
 
   const currentSignature = evidenceSignature(evidence);
   const hasPlayedAnyMove = !!evidence && evidence.moves.length > 0;
@@ -145,8 +144,9 @@ export default function TournamentCard({
     </span>
   );
 
-  const canFinalize = (isOwner || hasJoined) && participantCount > 0;
-  const canOwnerRefundEmpty = isOwner && isAwaitingFinalize && participantCount === 0 && prizePool > 0;
+  const canFinalize = isOwner || hasJoined;
+  const canOwnerReclaimEmpty =
+    isFinalized && isOwner && !hasClaimed && participantCount === 0 && prizePool > 0n;
 
   const submitLabel = alreadySubmittedThisRun
     ? "Submitted ✓"
@@ -242,15 +242,6 @@ export default function TournamentCard({
           />
         )}
 
-        {isConnected && canOwnerRefundEmpty && !hasClaimed && (
-          <ActionButton
-            label="Refund empty pool"
-            icon={<Undo2 size={14} />}
-            pending={pending === "refund"}
-            onClick={() => run("refund", onClaimRefund)}
-          />
-        )}
-
         {isConnected &&
           isFinalized &&
           !hasClaimed &&
@@ -262,6 +253,15 @@ export default function TournamentCard({
               onClick={() => run("claim", onClaimPrize)}
             />
           )}
+
+        {isConnected && canOwnerReclaimEmpty && (
+          <ActionButton
+            label={`Claim refund (${formatWeiToGen(prizePool)} GEN)`}
+            icon={<Undo2 size={14} />}
+            pending={pending === "refund"}
+            onClick={() => run("refund", onClaimRefund)}
+          />
+        )}
 
         {isConnected &&
           isCancelled &&
