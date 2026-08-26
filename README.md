@@ -2,7 +2,7 @@
 
 A Vite + React + TypeScript + Tailwind frontend for the `Game2048Platform` GenLayer Intelligent Contract: a free-play global leaderboard plus payable, time-boxed tournaments with automated prize distribution.
 
-- **Contract:** `0x63281F0EA13A77f8d31ba3eA38D90c45f0Ea135B`
+- **Contract:** `0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c`
 - **Network:** GenLayer Testnet Bradbury (chain ID `4221`, RPC `https://rpc-bradbury.genlayer.com`)
 - **SDK:** [`genlayer-js`](https://github.com/genlayerlabs/genlayer-js) (read client for RPC queries, wallet-bound write client for signing transactions)
 
@@ -77,7 +77,7 @@ Open `http://localhost:5173` and connect your wallet. Make sure you are connecte
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VITE_CONTRACT_ADDRESS` | `0x63281F0EA13A77f8d31ba3eA38D90c45f0Ea135B` | Deployed contract address |
+| `VITE_CONTRACT_ADDRESS` | `0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c` | Deployed contract address |
 
 ---
 
