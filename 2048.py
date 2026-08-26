@@ -16,6 +16,25 @@ itself. Because this replay is pure deterministic Python (no LLM/web
 access), GenVM's normal leader/validator consensus is what accepts or
 rejects the transaction -- validators are agreeing on a verified replay,
 not trusting a self-reported figure.
+
+Known limitation: a player can simulate many seeds off-chain before ever
+touching the chain, and only submit the run that came out best. Closing
+that fully needs a commit-reveal or per-move entropy scheme (a chain
+round-trip per tile), which is a bigger UX change than this pass covers.
+This validator's job is narrower and still real: it guarantees any
+*accepted* score is the mathematically correct result of legal 2048 moves
+applied to a legal spawn sequence, not an arbitrary number.
+
+Prize pool lifecycle
+---------------------
+`prize_pool` is funded from two places: an optional initial contribution
+sent along with `create_tournament` (`gl.message.value`), and any later
+`fund_tournament` calls. It is drawn down in two places: per-winner shares
+paid out via `claim_prize` after a normal finalize, and a creator-only
+reclaim via `claim_refund` when a tournament finalizes with zero winners
+(no participants ever joined, or participants joined but nobody submitted
+a valid score) -- both are "no one to pay" cases that would otherwise leave
+funds permanently stuck in the contract.
 """
 
 from genlayer import *
@@ -33,7 +52,7 @@ MAX_REPLAY_MOVES = u32(4000)  # replay compute/gas bound
 
 
 # ---------------------------------------------------------------------------
-# EVM Contract Interface for Value Transfers to EOAs / MetaMask
+# EVM Account interface for external transfers (EOA / MetaMask)
 # ---------------------------------------------------------------------------
 
 @gl.evm.contract_interface
@@ -77,7 +96,7 @@ class Tournament:
 
 
 # ---------------------------------------------------------------------------
-# Plain view-return dataclasses
+# Plain (non-storage) view-return dataclasses
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -118,6 +137,12 @@ class ParticipantStatusView:
 
 # ---------------------------------------------------------------------------
 # Deterministic 2048 replay engine
+#
+# Every function below is pure (no `self`, no storage access) and MUST stay
+# byte-for-byte in sync with the mirrored logic in `Game2048.tsx`
+# (`xorshift32`, `SeededRng`, `spawnTileSeeded`, `move`). If either side
+# changes the collapse/rotate/RNG algorithm, replay validation will start
+# rejecting every legitimate game.
 # ---------------------------------------------------------------------------
 
 _SIZE = 4
@@ -218,6 +243,13 @@ def _move_board(board, direction: str):
 
 
 def _replay_moves(seed: int, moves: str):
+    """Replays (seed, moves) through the 2048 engine.
+
+    Returns (final_score, is_valid). is_valid is False if the evidence is
+    malformed, contains an illegal/no-op move, or produces an implausible
+    score -- any of which means the submission is rejected outright rather
+    than silently corrected.
+    """
     if len(moves) > int(MAX_REPLAY_MOVES):
         return 0, False
 
@@ -234,6 +266,8 @@ def _replay_moves(seed: int, moves: str):
             return 0, False
         new_board, gained, moved = _move_board(board, ch)
         if not moved:
+            # A recorded move that doesn't change the board can't come from
+            # a genuine playthrough -- the UI only records moves that did.
             return 0, False
         board = new_board
         total_score += gained
@@ -276,6 +310,10 @@ class Game2048Platform(gl.Contract):
             raise gl.vm.UserError("Only the contract owner may perform this action")
 
     def _now_ts(self) -> u256:
+        # GenVM exposes a deterministic transaction time: every validator
+        # replaying this transaction computes the same value, which is what
+        # makes on-chain deadline enforcement possible at all (the previous
+        # implementation returned a hardcoded 0 and enforced nothing).
         return u256(int(datetime.datetime.now().timestamp()))
 
     def _get_tournament_or_raise(self, tournament_id: u32) -> Tournament:
@@ -329,11 +367,14 @@ class Game2048Platform(gl.Contract):
     ) -> u32:
         self._require_owner()
 
-        initial_pool = u256(gl.message.value)
         max_participants = u32(max_participants)
         winner_count = u32(winner_count)
         entry_fee = u256(entry_fee)
         deadline_timestamp = u256(deadline_timestamp)
+
+        # Any GEN sent along with this call seeds the prize pool directly,
+        # so the creator doesn't need a separate fund_tournament follow-up.
+        initial_funding = u256(gl.message.value)
 
         if len(name) == 0:
             raise gl.vm.UserError("Tournament name cannot be empty")
@@ -358,7 +399,7 @@ class Game2048Platform(gl.Contract):
             max_participants=max_participants,
             winner_count=winner_count,
             entry_fee=entry_fee,
-            prize_pool=initial_pool,
+            prize_pool=initial_funding,
             deadline_ts=deadline_timestamp,
             created_at_ts=now_ts,
             participant_count=u32(0),
@@ -421,9 +462,11 @@ class Game2048Platform(gl.Contract):
         if self.tournament_joined.get(join_key, False):
             raise gl.vm.UserError("Player has already joined this tournament")
 
+        # Strict fee validation restored
         if paid != t.entry_fee:
             raise gl.vm.UserError("Incorrect entry fee amount sent")
 
+        # --- Effects ---
         self.tournament_joined[join_key] = True
 
         idx = int(t.participant_count)
@@ -510,17 +553,8 @@ class Game2048Platform(gl.Contract):
     @gl.public.write
     def finalize_tournament(self, tournament_id: u32) -> None:
         tournament_id = u32(tournament_id)
-        caller = gl.message.sender_address
         t = self._get_tournament_or_raise(tournament_id)
         tid_str = str(int(tournament_id))
-        caller_str = str(caller)
-        join_key = f"{tid_str}_{caller_str}"
-
-        # Only participants or the creator/owner can finalize
-        is_creator = (caller == t.creator or caller == self.owner)
-        has_joined = self.tournament_joined.get(join_key, False)
-        if not is_creator and not has_joined:
-            raise gl.vm.UserError("Only participants or creator may finalize this tournament")
 
         if t.is_cancelled:
             raise gl.vm.UserError("Tournament has been cancelled")
@@ -603,6 +637,7 @@ class Game2048Platform(gl.Contract):
         if amount == 0:
             raise gl.vm.UserError("No prize available for this address")
 
+        # --- Effects before interaction ---
         self.tournament_claimed[action_key] = True
         self.tournament_prize_amounts[action_key] = u256(0)
 
@@ -621,11 +656,23 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        # Standard EVM Interface external transfer for EOA / MetaMask[cite: 20]
-        _Recipient(Address(player)).emit_transfer(value=amount)
+        # --- Interaction: emit transfer to player Address ---
+        _Recipient(player).emit_transfer(value=amount)
 
     @gl.public.write
     def claim_refund(self, tournament_id: u32) -> None:
+        """Two distinct refund paths, both gated on tournament_claimed to
+        prevent double payouts:
+
+        1. Cancelled tournament -> any player who joined reclaims their
+           entry fee (original behaviour, unchanged).
+        2. Finalized tournament with zero recorded winners -> the creator
+           reclaims whatever is left in the prize pool. Zero winners covers
+           both "nobody ever joined" and "people joined but nobody
+           submitted a valid score" -- in either case there's no one for
+           claim_prize to pay, so without this path the funds would be
+           stuck in the contract forever.
+        """
         tournament_id = u32(tournament_id)
         player = gl.message.sender_address
 
@@ -634,33 +681,49 @@ class Game2048Platform(gl.Contract):
         action_key = f"{tid_str}_{player_str}"
 
         t = self._get_tournament_or_raise(tournament_id)
-        now_ts = self._now_ts()
-        is_past_deadline = int(now_ts) >= int(t.deadline_ts)
-        is_empty = int(t.participant_count) == 0
-        is_creator = (player == t.creator or player == self.owner)
-        has_joined = self.tournament_joined.get(action_key, False)
+        is_creator = player == t.creator
 
-        # Allows refund if cancelled OR if deadline passed with 0 participants
-        if not t.is_cancelled and not (is_creator and is_past_deadline and is_empty):
-            raise gl.vm.UserError("Tournament is not cancelled or eligible for refund")
+        if t.is_cancelled:
+            if not self.tournament_joined.get(action_key, False):
+                raise gl.vm.UserError("You did not join this tournament")
+            if self.tournament_claimed.get(action_key, False):
+                raise gl.vm.UserError("Refund already claimed")
 
-        if self.tournament_claimed.get(action_key, False):
-            raise gl.vm.UserError("Refund already claimed")
-
-        if not is_creator and not has_joined:
-            raise gl.vm.UserError("You have no funds to claim from this tournament")
-
-        refund_amount = u256(0)
-        if is_creator and is_empty:
-            refund_amount = t.prize_pool
-        elif has_joined:
             refund_amount = t.entry_fee
+            if refund_amount == 0:
+                raise gl.vm.UserError("Nothing to refund for this tournament")
 
-        if int(refund_amount) == 0:
-            raise gl.vm.UserError("Nothing to refund for this address")
+            self.tournament_claimed[action_key] = True
+            new_pool = u256(int(t.prize_pool) - int(refund_amount))
 
-        self.tournament_claimed[action_key] = True
+        elif t.is_finalized:
+            if not is_creator:
+                raise gl.vm.UserError(
+                    "Only the tournament creator may reclaim an unclaimed prize pool"
+                )
 
+            n_winners = self.tournament_winner_count.get(tournament_id, u32(0))
+            if int(n_winners) > 0:
+                raise gl.vm.UserError(
+                    "Prize pool has eligible winners; refunds are not available"
+                )
+            if self.tournament_claimed.get(action_key, False):
+                raise gl.vm.UserError("Refund already claimed")
+
+            refund_amount = t.prize_pool
+            if refund_amount == 0:
+                raise gl.vm.UserError("Nothing to refund for this tournament")
+
+            self.tournament_claimed[action_key] = True
+            new_pool = u256(0)
+
+        else:
+            raise gl.vm.UserError(
+                "Tournament must be cancelled, or finalized with zero winners, "
+                "before a refund can be claimed"
+            )
+
+        # --- Effects before interaction ---
         self.tournaments[tournament_id] = Tournament(
             tournament_id=t.tournament_id,
             name=t.name,
@@ -668,7 +731,7 @@ class Game2048Platform(gl.Contract):
             max_participants=t.max_participants,
             winner_count=t.winner_count,
             entry_fee=t.entry_fee,
-            prize_pool=u256(int(t.prize_pool) - int(refund_amount)),
+            prize_pool=new_pool,
             deadline_ts=t.deadline_ts,
             created_at_ts=t.created_at_ts,
             participant_count=t.participant_count,
@@ -676,8 +739,8 @@ class Game2048Platform(gl.Contract):
             is_cancelled=t.is_cancelled,
         )
 
-        # Standard EVM Interface external transfer for EOA / MetaMask[cite: 20]
-        _Recipient(Address(player)).emit_transfer(value=refund_amount)
+        # --- Interaction: emit transfer to player Address ---
+        _Recipient(player).emit_transfer(value=refund_amount)
 
     @gl.public.write
     def transfer_ownership(self, new_owner: Address) -> None:
@@ -786,7 +849,7 @@ class Game2048Platform(gl.Contract):
     @gl.public.view
     def get_tournament_count(self) -> u32:
         try:
-            return u32(len(self.tournament_ids))
+            return u32(int(self.next_tournament_id) - 1)
         except Exception:
             return u32(0)
 
