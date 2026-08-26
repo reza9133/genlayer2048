@@ -108,5 +108,3 @@ npm run preview # serves the production build locally
 
 * **Finalization:** `finalize_tournament` is callable by anyone once the deadline has passed, ensuring tournaments can be resolved without dependency on the creator.
 * **Admin Control:** Tournament creation and cancellation are restricted to the contract `owner`.
-
-```
