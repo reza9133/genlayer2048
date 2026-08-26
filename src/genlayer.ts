@@ -48,7 +48,7 @@ function sleep(ms: number) {
 async function waitForStatus(
   hash: `0x${string}`,
   status: TransactionStatus = TransactionStatus.ACCEPTED,
-  { retries = 20, retryDelayMs = 2000 }: { retries?: number; retryDelayMs?: number } = {},
+  { retries = 30, retryDelayMs = 2000 }: { retries?: number; retryDelayMs?: number } = {},
 ) {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -170,7 +170,19 @@ export const finalizeTournament = (address: string, tournamentId: number) =>
   write(address, "finalize_tournament", [tournamentId]);
 
 export const claimPrize = (address: string, tournamentId: number) =>
-  write(address, "claim_prize", [tournamentId]);
+  write(
+    address,
+    "claim_prize",
+    [tournamentId],
+    0n,
+    TransactionStatus.FINALIZED,
+  );
 
 export const claimRefund = (address: string, tournamentId: number) =>
-  write(address, "claim_refund", [tournamentId]);
+  write(
+    address,
+    "claim_refund",
+    [tournamentId],
+    0n,
+    TransactionStatus.FINALIZED,
+  );
