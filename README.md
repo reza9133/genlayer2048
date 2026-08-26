@@ -110,5 +110,3 @@ npm run preview # serves the production build locally
 * **Admin Control:** Tournament creation and cancellation are restricted to the contract `owner`.
 
 ```
-
-```
