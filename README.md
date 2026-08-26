@@ -99,7 +99,7 @@ npm run preview # serves the production build locally
 * **Build output directory:** `dist`
 
 
-4. Set the environment variable `VITE_CONTRACT_ADDRESS` to `0x085B438e7A182eaD901931e4735Bb19f329f886A`.
+4. Set the environment variable `VITE_CONTRACT_ADDRESS` to `0x60e0eD2bbd5776Ada0CBE94dC99D19414e731E6c`.
 5. Deploy.
 
 ---
